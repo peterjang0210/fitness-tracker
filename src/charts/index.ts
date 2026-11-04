@@ -1,11 +1,11 @@
-/**
- * Recharts entry point for later progress charts.
- * Stage 1 does not render a chart; importing from here keeps the dependency typed and ready.
- */
 export {
+  Bar,
+  BarChart,
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,

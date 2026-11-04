@@ -22,6 +22,15 @@ export function NavIcon({ name }: { name: NavIconName }) {
     );
   }
 
+  if (name === "calendar") {
+    return (
+      <svg {...common}>
+        <rect x="4" y="5" width="16" height="15" rx="2" />
+        <path d="M8 3.5v3M16 3.5v3M4 10h16" />
+      </svg>
+    );
+  }
+
   if (name === "workouts") {
     return (
       <svg {...common}>

@@ -1,5 +1,6 @@
 import { HashRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell.tsx";
+import { CalendarPage } from "./pages/CalendarPage.tsx";
 import { DashboardPage } from "./pages/DashboardPage.tsx";
 import { ProgressPage } from "./pages/ProgressPage.tsx";
 import { RunningPage } from "./pages/RunningPage.tsx";
@@ -14,6 +15,7 @@ export default function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
             <Route path="workouts" element={<WorkoutsPage />} />
             <Route path="running" element={<RunningPage />} />
             <Route path="progress" element={<ProgressPage />} />
