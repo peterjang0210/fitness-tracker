@@ -157,6 +157,10 @@ code {
   flex: none;
 }
 
+.nav-short {
+  display: none;
+}
+
 .sidebar .nav-link.is-active {
   background: rgba(255, 247, 242, 0.1);
   color: #fff;
@@ -178,8 +182,8 @@ code {
 }
 
 .content {
-  width: min(920px, 100%);
-  padding: 2.5rem 2rem 3rem;
+  width: min(1080px, 100%);
+  padding: 2rem 1.5rem 3rem;
 }
 
 .page-header {
@@ -196,13 +200,13 @@ code {
 }
 
 h1 {
-  font-size: clamp(2.2rem, 4vw, 3.4rem);
-  line-height: 0.95;
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
+  line-height: 1.05;
 }
 
 .lede {
-  margin-top: 0.8rem;
-  font-size: 1.05rem;
+  margin-top: 0.55rem;
+  font-size: 1rem;
 }
 
 .target-grid,
@@ -399,6 +403,32 @@ a.button {
   opacity: 0.45;
 }
 
+.button.quiet {
+  min-height: 2rem;
+  padding: 0.1rem 0.45rem;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.button.quiet:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--line) 65%, transparent);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .session-grid,
 .editor-stack,
 .workout-home {
@@ -510,20 +540,271 @@ a.button {
 
 .set-table {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.35rem;
 }
 
+.set-head,
 .set-row {
   display: grid;
-  grid-template-columns: 1.4rem repeat(3, minmax(0, 1fr)) auto;
-  gap: 0.45rem;
-  align-items: end;
+  grid-template-columns: 1.4rem minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(0, 0.7fr) 2rem;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.set-head {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .set-index {
-  padding-bottom: 0.55rem;
   color: var(--muted);
   font-weight: 700;
+}
+
+.set-block {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.set-block.is-skipped {
+  opacity: 0.72;
+}
+
+.set-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding-left: 1.8rem;
+}
+
+.set-note {
+  flex: 1 1 8rem;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.set-save {
+  color: var(--good);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.set-save.is-pending {
+  color: var(--muted);
+}
+
+.status-row {
+  display: inline-flex;
+  flex: none;
+  padding: 0.15rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--bg);
+}
+
+.status-row .button {
+  min-height: 2rem;
+  padding: 0.15rem 0.6rem;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.status-row .button.is-selected {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.editor-actions {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--bg-raised) 94%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+}
+
+.save-note {
+  margin-left: auto;
+}
+
+.meter {
+  height: 0.4rem;
+  margin: 0.55rem 0 0.35rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 85%, transparent);
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.dash-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 0.85rem;
+}
+
+.schedule-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.schedule-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--bg);
+  text-decoration: none;
+}
+
+.schedule-copy strong,
+.schedule-copy span {
+  display: block;
+}
+
+.schedule-copy span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.schedule-row.is-done {
+  border-color: color-mix(in srgb, var(--good) 45%, var(--line));
+}
+
+.schedule-row.is-missed {
+  border-color: color-mix(in srgb, var(--danger) 50%, var(--line));
+}
+
+.schedule-row.is-today {
+  border-color: var(--accent);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.6rem;
+  min-height: 1.45rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.status-pill.is-done {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  color: var(--good);
+}
+
+.status-pill.is-missed {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+
+.status-pill.is-today,
+.status-pill.is-open {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.callout {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.guide-grid {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.guide-steps {
+  margin: 0 0 0.8rem;
+  padding-left: 1.2rem;
+}
+
+.ref-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.ref-table caption {
+  caption-side: bottom;
+  padding-top: 0.4rem;
+  color: var(--muted);
+  text-align: left;
+}
+
+.ref-table th,
+.ref-table td {
+  padding: 0.35rem 0.2rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.plan-item.is-done {
+  border-color: color-mix(in srgb, var(--good) 50%, var(--line));
+}
+
+.plan-item.is-missed {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+}
+
+.plan-item.is-today,
+.session-card.is-today {
+  border-color: var(--accent);
+}
+
+.session-card.is-done {
+  border-color: color-mix(in srgb, var(--good) 50%, var(--line));
+}
+
+.session-card.is-skipped,
+.plan-item.is-skipped,
+.schedule-row.is-skipped {
+  opacity: 0.78;
 }
 
 .field {
@@ -630,7 +911,7 @@ a.button {
   }
 
   .content {
-    padding: 1.25rem 1rem calc(6.5rem + env(safe-area-inset-bottom));
+    padding: 1.25rem 1rem calc(8.75rem + env(safe-area-inset-bottom));
   }
 
   input,
@@ -649,13 +930,18 @@ a.button {
     grid-template-columns: 1fr;
   }
 
-  .set-row {
-    grid-template-columns: 1.4rem 1fr 1fr;
+  .editor-actions {
+    bottom: calc(5.4rem + env(safe-area-inset-bottom));
   }
 
-  .set-row .button {
-    grid-column: 2 / -1;
-    width: fit-content;
+  .stat-grid,
+  .guide-grid,
+  .dash-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .save-note {
+    margin-left: 0;
   }
 
   .tabbar {
@@ -680,8 +966,16 @@ a.button {
     gap: 0.15rem;
     min-height: 3.4rem;
     padding: 0.3rem 0.15rem;
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     text-align: center;
+  }
+
+  .tabbar .nav-label {
+    display: none;
+  }
+
+  .tabbar .nav-short {
+    display: block;
   }
 
   .tabbar .nav-link.is-active {
@@ -704,7 +998,7 @@ a.button {
 
 .day-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.6rem;
   margin-top: 0.85rem;
 }
@@ -748,6 +1042,11 @@ a.button {
 .plan-item .button,
 .plan-item .field input {
   width: 100%;
+  min-width: 0;
+}
+
+.plan-item p {
+  overflow-wrap: anywhere;
 }
 
 .edit-grid {
@@ -755,6 +1054,33 @@ a.button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
   margin-top: 0.7rem;
+}
+
+.picker-list {
+  display: grid;
+  gap: 0.4rem;
+  max-height: 18rem;
+  margin: 0.7rem 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--bg);
+}
+
+.picker-row strong,
+.picker-row .meta {
+  display: block;
 }
 
 .library-session {
@@ -785,7 +1111,7 @@ a.button {
 }
 
 .chart-frame {
-  height: 240px;
+  height: 280px;
   margin-top: 0.8rem;
 }
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TestGuide } from "./TestGuide.tsx";
 import {
   createSegment,
   formatClock,
@@ -11,6 +12,7 @@ import {
   type RunSegment,
   type RunWorkout,
   type SegmentType,
+  type TestKind,
 } from "../../domain/running.ts";
 
 function numberValue(value: number | null): string {
@@ -87,6 +89,11 @@ export function RunEditor({
           <span>Total running time ÷ distance</span>
         </article>
         <article className="target-card">
+          <p>Average speed</p>
+          <strong>{totals.runningMinutes > 0 ? `${(totals.runningMiles / (totals.runningMinutes / 60)).toFixed(2)} mph` : "—"}</strong>
+          <span>From the running segments</span>
+        </article>
+        <article className="target-card">
           <p>Treadmill time</p>
           <strong>{formatClock(totals.totalMinutes)}</strong>
           <span>Includes walking</span>
@@ -108,6 +115,64 @@ export function RunEditor({
           <input required value={run.name} onChange={(event) => onChange({ ...run, name: event.target.value })} />
         </label>
       </div>
+
+      <div className="editor-bar">
+        <label className="field">
+          <span>Test</span>
+          <select
+            value={run.testKind ?? ""}
+            onChange={(event) => {
+              const testKind = event.target.value === "mile" || event.target.value === "fivek" ? event.target.value : null;
+              onChange({
+                ...run,
+                testKind,
+                incline: testKind && run.incline == null ? 1 : run.incline,
+                continuous: testKind && run.continuous == null ? true : run.continuous,
+              });
+            }}
+          >
+            <option value="">Not a time trial</option>
+            <option value="mile">1-mile time trial</option>
+            <option value="fivek">5K time trial</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Incline %</span>
+          <input
+            type="number"
+            min="0"
+            max="15"
+            step="0.5"
+            value={run.incline ?? ""}
+            placeholder="0.5–1 for a test"
+            onChange={(event) => onChange({ ...run, incline: parseNumber(event.target.value) })}
+          />
+        </label>
+        <label className="field">
+          <span>Effort</span>
+          <select
+            value={run.continuous == null ? "" : run.continuous ? "continuous" : "walking"}
+            onChange={(event) =>
+              onChange({
+                ...run,
+                continuous: event.target.value === "" ? null : event.target.value === "continuous",
+              })
+            }
+          >
+            <option value="">Not recorded</option>
+            <option value="continuous">Continuous, no walking</option>
+            <option value="walking">Included walking</option>
+          </select>
+        </label>
+      </div>
+      {run.testKind ? (
+        <>
+          <p className="callout">
+            Do not run this test if your knee hurts or you are unusually sore. Warm-up and walking segments stay out of the time, distance, and pace. Edit the running segment so its time and speed match what you ran.
+          </p>
+          <TestGuide kind={run.testKind as TestKind} />
+        </>
+      ) : null}
 
       {run.segments.map((segment, index) => {
         const counted = segment.type === "running";
@@ -224,7 +289,7 @@ export function RunEditor({
         />
       </label>
 
-      <div className="inline-actions">
+      <div className="editor-actions">
         <button type="submit" className="button primary">
           {run.status === "skipped" ? "Save skip" : "Save run"}
         </button>
@@ -259,8 +324,8 @@ export function RunEditor({
             </button>
           )
         ) : null}
-        {saved ? <p className="ok">Run saved in this browser.</p> : null}
-        {templateSaved ? <p className="ok">Template saved in this browser.</p> : null}
+        <p className={saved ? "ok save-note" : "meta save-note"}>{saved ? "Saved on this device." : "Not saved yet."}</p>
+        {templateSaved ? <p className="ok save-note">Template saved on this device.</p> : null}
       </div>
     </form>
   );

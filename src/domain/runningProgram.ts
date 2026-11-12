@@ -1,4 +1,5 @@
-import { createId, formatDisplayDate, todayInputDate, type WorkoutLog } from "./workoutLog.ts";
+import { TESTING_WEEK } from "./strengthProgram.ts";
+import { createId, formatDisplayDate, isCompletedSet, todayInputDate, type WorkoutLog } from "./workoutLog.ts";
 import {
   createSegment,
   formatClock,
@@ -10,9 +11,11 @@ import {
   type RunSegment,
   type RunWorkout,
   type SegmentType,
+  type TestKind,
 } from "./running.ts";
 
-export const PROGRAM_WEEKS = 16;
+export const PROGRAM_WEEKS = TESTING_WEEK;
+export { TESTING_WEEK };
 export const DEFAULT_PROGRAM_START = "2026-11-03";
 export const MILE_GOAL_MPH = 60 / 7;
 export const FIVE_K_MILES = 5000 / 1609.344;
@@ -37,12 +40,16 @@ export interface PlanSession {
   quality: boolean;
   summary: string;
   blocks: PlanBlock[];
+  testKind?: TestKind;
+  postponable?: boolean;
+  fixed?: boolean;
 }
 
 export interface WeekPlan {
   week: number;
   phase: string;
   recovery: boolean;
+  testing?: boolean;
   note: string;
   sessions: PlanSession[];
 }
@@ -405,7 +412,7 @@ export const runningProgram: WeekPlan[] = [
     week: 16,
     phase: "Goal-pace preparation",
     recovery: true,
-    note: "End of the block. Short and controlled. This is not a mile test or a 5K race.",
+    note: "Last training week. Keep Friday controlled. Monday is a rest or an easy walk before the testing week.",
     sessions: [
       easy("tuesday", 15, 5.5),
       repeats({
@@ -420,7 +427,100 @@ export const runningProgram: WeekPlan[] = [
       easy("weekend", 12, 5.5, true, "10–15 min"),
     ],
   },
+  {
+    week: TESTING_WEEK,
+    phase: "Testing",
+    recovery: true,
+    testing: true,
+    note: "Recovery and testing, not a normal training week. No hard intervals. The Wednesday squat is about half of a usual lower-body day and has no hard lower accessories. Keep at least one full day between the mile and the 5K. Do not run a maximal test if your knee hurts or you are unusually sore. Move the test instead.",
+    sessions: [
+      mileTrial(),
+      fiveKTrial(),
+      {
+        slot: "weekend",
+        title: "Recovery and review",
+        optional: true,
+        quality: false,
+        fixed: true,
+        summary: "Optional easy walk. Review the mile and 5K against the 10-minute, 5.5 mph baseline. No intervals.",
+        blocks: [{ type: "warmup", minutes: 15, speedMph: 3, label: "Optional walk" }],
+      },
+    ],
+  },
 ];
+
+function effortBlock(miles: number, mph: number, label: string): PlanBlock {
+  const totalSeconds = Math.max(1, Math.round((miles / mph) * 3600));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const duration = minutes + seconds / 60;
+  return { type: "running", minutes, seconds, speedMph: (miles * 60) / duration, label };
+}
+
+function mileTrial(): PlanSession {
+  return {
+    slot: "tuesday",
+    title: "1-mile time trial",
+    quality: false,
+    fixed: true,
+    postponable: true,
+    testKind: "mile",
+    summary: "Walk 3 min, jog 5 min, then 3 short accelerations. Run exactly 1.00 mile at 0.5–1% incline. The 10:00 at 6.00 mph segment is a template. Change it to the time you actually ran.",
+    blocks: [
+      { type: "warmup", minutes: 3, speedMph: 3, label: "Walk" },
+      { type: "warmup", minutes: 5, speedMph: 5, label: "Easy jog" },
+      { type: "warmup", minutes: 0, seconds: 20, speedMph: 6.5, repeats: 3, recoveryMinutes: 1, recoverySpeed: 3, label: "Acceleration" },
+      { type: "warmup", minutes: 1, speedMph: 3, label: "Walk before the test" },
+      effortBlock(1, 6, "1-mile time trial"),
+    ],
+  };
+}
+
+function fiveKTrial(): PlanSession {
+  return {
+    slot: "friday",
+    title: "5K time trial",
+    quality: false,
+    fixed: true,
+    postponable: true,
+    testKind: "fivek",
+    summary: "Walk 3 min, jog 5 min, then 2 easy minutes. Run 3.11 miles at 0.5–1% incline, even pace, and only speed up in the last mile if you still have it. The segment is a 6.00 mph template. Change it to the time you actually ran.",
+    blocks: [
+      { type: "warmup", minutes: 3, speedMph: 3, label: "Walk" },
+      { type: "warmup", minutes: 5, speedMph: 5, label: "Easy jog" },
+      { type: "warmup", minutes: 2, speedMph: 3.5, label: "Easy walk or jog" },
+      effortBlock(FIVE_K_MILES, 6, "5K time trial"),
+    ],
+  };
+}
+
+export function manualTest(kind: TestKind, date = todayInputDate()): RunWorkout {
+  const block = effortBlock(kind === "mile" ? 1 : FIVE_K_MILES, 6, kind === "mile" ? "1-mile time trial" : "5K time trial");
+  return {
+    id: createId(),
+    date,
+    name: kind === "mile" ? "1-mile time trial" : "5K time trial",
+    notes: "",
+    segments: [
+      createSegment({
+        type: "running",
+        minutes: block.minutes,
+        seconds: block.seconds,
+        speedMph: block.speedMph,
+        label: block.label,
+      }),
+    ],
+    updatedAt: new Date().toISOString(),
+    rpe: null,
+    status: "logged",
+    planWeek: null,
+    planSlot: null,
+    difficulty: null,
+    testKind: kind,
+    incline: 1,
+    continuous: true,
+  };
+}
 
 export function weekPlan(week: number): WeekPlan {
   return runningProgram[Math.min(PROGRAM_WEEKS, Math.max(1, week)) - 1] ?? runningProgram[0]!;
@@ -472,12 +572,13 @@ function adjustedSpeed(base: number, difficulty: RunDifficulty, quality: boolean
 
 export function segmentsFor(session: PlanSession, difficulty: RunDifficulty): RunSegment[] {
   const segments: RunSegment[] = [];
+  const locked = Boolean(session.fixed);
   for (const block of session.blocks) {
-    const speed = block.type === "running" ? adjustedSpeed(block.speedMph, difficulty, session.quality) : block.speedMph;
+    const speed = !locked && block.type === "running" ? adjustedSpeed(block.speedMph, difficulty, session.quality) : block.speedMph;
     const repeats = block.repeats ?? 1;
-    const fewer = difficulty === "easier" && !session.quality && block.type === "running";
+    const fewer = !locked && difficulty === "easier" && !session.quality && block.type === "running";
     const minutes = fewer ? Math.max(8, Math.round(block.minutes * 0.85)) : block.minutes;
-    const repCount = difficulty === "easier" && session.quality && repeats > 3 ? repeats - 1 : repeats;
+    const repCount = !locked && difficulty === "easier" && session.quality && repeats > 3 ? repeats - 1 : repeats;
     for (let index = 0; index < repCount; index += 1) {
       segments.push(
         createSegment({
@@ -515,7 +616,10 @@ export function plannedRun(session: PlanSession, week: number, date: string, dif
     status: "logged",
     planWeek: week,
     planSlot: session.slot,
-    difficulty,
+    difficulty: session.fixed ? "planned" : difficulty,
+    testKind: session.testKind ?? null,
+    incline: session.testKind ? 1 : null,
+    continuous: session.testKind ? true : null,
   };
 }
 
@@ -575,6 +679,13 @@ export function adviseSession(
   if (reasons.length === 0) {
     reasons.push("No recent hard run or heavy squat. The planned workout is the conservative choice.");
   }
+  if (session.fixed) {
+    difficulty = "planned";
+    reasons.push("The written distance stays put. After the effort, edit the time and speed to what you ran.");
+  }
+  if (session.testKind) {
+    reasons.push("Skip this test if your knee hurts or you are unusually sore, and move the date. A postponed test is not marked missed.");
+  }
   return { difficulty, reasons };
 }
 
@@ -586,7 +697,7 @@ function recentSquat(workouts: WorkoutLog[], date: string): { name: string; date
     for (const exercise of workout.exercises) {
       if (!keys.has(exercise.exerciseKey) || exercise.status === "skipped") continue;
       const rpe = exercise.sets.reduce<number | null>((highest, set) => {
-        if (set.rpe == null) return highest;
+        if (!isCompletedSet(set) || set.rpe == null) return highest;
         return highest == null ? set.rpe : Math.max(highest, set.rpe);
       }, null);
       if (!best || workout.date > best.date) best = { name: exercise.name, date: workout.date, rpe };

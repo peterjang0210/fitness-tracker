@@ -2,18 +2,25 @@ import {
   convertWeight,
   exerciseTemplate,
   formatWeight,
+  isProgramSessionKey,
   sessionTemplate,
+  TESTING_WEEK,
+  type ProgramSessionKey,
   type SessionKey,
 } from "./strengthProgram.ts";
-import type { LibraryEdit, WeightUnit } from "../storage/appData.ts";
+import type { FutureSessionPlan, LibraryEdit, LibraryExercise, WeightUnit } from "../storage/appData.ts";
 
 export type ExerciseStatus = "pending" | "completed" | "skipped";
+
+export type SetStatus = "pending" | "completed" | "skipped";
 
 export interface SetLog {
   id: string;
   weight: number | null;
   reps: number | null;
   rpe: number | null;
+  notes: string;
+  status: SetStatus;
 }
 
 export interface ExerciseLog {
@@ -25,6 +32,8 @@ export interface ExerciseLog {
   optional: boolean;
   status: ExerciseStatus;
   notes: string;
+  instructions: string;
+  targetWeight: number | null;
   supersetId: string | null;
   sets: SetLog[];
 }
@@ -52,7 +61,37 @@ export function todayInputDate(): string {
 }
 
 export function createSet(): SetLog {
-  return { id: createId(), weight: null, reps: null, rpe: null };
+  return { id: createId(), weight: null, reps: null, rpe: null, notes: "", status: "pending" };
+}
+
+export function isCompletedSet(set: SetLog): boolean {
+  return set.status === "completed" && set.reps != null && set.reps > 0;
+}
+
+export function applySetPatch(set: SetLog, patch: Partial<SetLog>): SetLog {
+  const next: SetLog = {
+    ...set,
+    ...patch,
+    notes: patch.notes ?? set.notes ?? "",
+    status: patch.status ?? set.status ?? "pending",
+  };
+  if (patch.status) return next;
+  if (patch.reps !== undefined) {
+    next.status = next.reps != null && next.reps > 0 ? "completed" : "pending";
+  }
+  return next;
+}
+
+export function setSignature(set: SetLog): string {
+  return JSON.stringify([set.weight, set.reps, set.rpe, set.notes ?? "", set.status]);
+}
+
+export function workoutHasLoggedSets(workout: WorkoutLog): boolean {
+  return workout.exercises.some((exercise) =>
+    exercise.sets.some(
+      (set) => set.weight != null || set.reps != null || set.rpe != null || Boolean(set.notes?.trim()) || set.status === "skipped" || set.status === "completed",
+    ),
+  );
 }
 
 export function blankExercise(): ExerciseLog {
@@ -65,18 +104,37 @@ export function blankExercise(): ExerciseLog {
     optional: false,
     status: "pending",
     notes: "",
+    instructions: "",
+    targetWeight: null,
     supersetId: null,
     sets: [createSet()],
   };
 }
 
+export function createCustomWorkout(unit: WeightUnit): WorkoutLog {
+  return {
+    id: createId(),
+    date: todayInputDate(),
+    sessionKey: "custom",
+    name: "Custom workout",
+    notes: "",
+    unit,
+    exercises: [],
+    updatedAt: new Date().toISOString(),
+    planWeek: null,
+  };
+}
+
 export function createWorkout(
-  sessionKey: SessionKey,
+  sessionKey: ProgramSessionKey,
   unit: WeightUnit,
   history: WorkoutLog[],
   edits: LibraryEdit[] = [],
+  plans: FutureSessionPlan[] = [],
+  week: number | null = null,
 ): WorkoutLog {
-  const template = sessionTemplate(sessionKey);
+  const template = sessionTemplate(sessionKey, week);
+  const plan = week === TESTING_WEEK ? undefined : plans.find((item) => item.sessionKey === sessionKey);
   const draft: WorkoutLog = {
     id: createId(),
     date: todayInputDate(),
@@ -86,31 +144,179 @@ export function createWorkout(
     unit,
     exercises: [],
     updatedAt: new Date().toISOString(),
-    planWeek: null,
+    planWeek: week,
   };
+  if (week === TESTING_WEEK) {
+    draft.notes = "Testing week. Skip this if your knee hurts or you are unusually sore.";
+  }
+  if (plan) {
+    const groups = new Map<string, string>();
+    draft.exercises = plan.exercises.map((exercise) =>
+      loggedExercise(draft, history, {
+        exerciseKey: exercise.exerciseKey,
+        name: exercise.name,
+        prescription: exercise.prescription,
+        repTarget: exercise.repTarget,
+        optional: exercise.optional,
+        instructions: exercise.instructions,
+        targetWeight: exercise.targetWeight,
+        sets: exercise.sets,
+        supersetId: exercise.supersetGroup ? groupId(groups, exercise.supersetGroup) : null,
+      }),
+    );
+    return draft;
+  }
   draft.exercises = template.exercises.map((exercise) => {
     const edit = edits.find((item) => item.sessionKey === sessionKey && item.exerciseKey === exercise.exerciseKey);
-    return {
+    return loggedExercise(draft, history, {
+      exerciseKey: exercise.exerciseKey,
+      name: edit?.name.trim() || exercise.name,
+      prescription: edit?.prescription.trim() || exercise.prescription,
+      repTarget: edit?.repTarget.trim() || exercise.repTarget,
+      optional: Boolean(exercise.optional),
+      instructions: "",
+      targetWeight: null,
+      sets: exercise.sets,
+      supersetId: null,
+    });
+  });
+  return draft;
+}
+
+function groupId(groups: Map<string, string>, key: string): string {
+  const existing = groups.get(key);
+  if (existing) return existing;
+  const id = createId();
+  groups.set(key, id);
+  return id;
+}
+
+function loggedExercise(
+  draft: WorkoutLog,
+  history: WorkoutLog[],
+  source: {
+    exerciseKey: string;
+    name: string;
+    prescription: string;
+    repTarget: string;
+    optional: boolean;
+    instructions: string;
+    targetWeight: number | null;
+    sets: number;
+    supersetId: string | null;
+  },
+): ExerciseLog {
+  const count = Math.max(1, Math.min(12, source.sets));
+  return {
     id: createId(),
-    exerciseKey: exercise.exerciseKey,
-    name: edit?.name.trim() || exercise.name,
-    prescription: edit?.prescription.trim() || exercise.prescription,
-    repTarget: edit?.repTarget.trim() || exercise.repTarget,
-    optional: Boolean(exercise.optional),
+    exerciseKey: source.exerciseKey,
+    name: source.name,
+    prescription: source.prescription,
+    repTarget: source.repTarget,
+    optional: source.optional,
+    status: "pending",
+    notes: "",
+    instructions: source.instructions,
+    targetWeight: source.targetWeight,
+    supersetId: source.supersetId,
+    sets: Array.from({ length: count }, () => {
+      const suggestion = suggestedWeight(source.exerciseKey, draft, history);
+      return { ...createSet(), weight: source.targetWeight ?? suggestion.weight };
+    }),
+  };
+}
+
+export function exerciseFromLibrary(entry: LibraryExercise, workout: WorkoutLog, history: WorkoutLog[]): ExerciseLog {
+  const template = exerciseTemplate(entry.id);
+  return loggedExercise(workout, history, {
+    exerciseKey: entry.id,
+    name: entry.name,
+    prescription: template?.prescription || `${entry.defaultSets}×${entry.defaultReps}`,
+    repTarget: entry.defaultReps || template?.repTarget || "",
+    optional: false,
+    instructions: entry.instructions,
+    targetWeight: null,
+    sets: entry.defaultSets || template?.sets || 3,
+    supersetId: null,
+  });
+}
+
+export function duplicateExercise(exercise: ExerciseLog): ExerciseLog {
+  return {
+    ...exercise,
+    id: createId(),
     status: "pending",
     notes: "",
     supersetId: null,
-    sets: Array.from({ length: exercise.sets }, () => {
-      const suggestion = suggestedWeight(exercise.exerciseKey, draft, history);
-      return { id: createId(), weight: suggestion.weight, reps: null, rpe: null };
-    }),
+    sets: exercise.sets.map((set) => ({ ...createSet(), weight: set.weight })),
   };
+}
+
+export function resizeSets(exercise: ExerciseLog, count: number): ExerciseLog {
+  const nextCount = Math.max(1, Math.min(12, Math.round(count)));
+  if (!Number.isFinite(nextCount)) return exercise;
+  const sets = exercise.sets.slice(0, nextCount);
+  while (sets.length < nextCount) {
+    sets.push({ ...createSet(), weight: exercise.targetWeight });
+  }
+  return { ...exercise, sets };
+}
+
+export function planFromWorkout(workout: WorkoutLog): FutureSessionPlan | null {
+  if (!isProgramSessionKey(workout.sessionKey)) return null;
+  return {
+    sessionKey: workout.sessionKey,
+    exercises: workout.exercises
+      .filter((exercise) => exercise.name.trim())
+      .map((exercise) => ({
+        exerciseKey: exercise.exerciseKey,
+        name: exercise.name.trim(),
+        prescription: exercise.prescription,
+        repTarget: exercise.repTarget,
+        optional: exercise.optional,
+        instructions: exercise.instructions,
+        sets: exercise.sets.length,
+        supersetGroup: exercise.supersetId,
+        targetWeight: exercise.targetWeight,
+      })),
+  };
+}
+
+export function restoreProgramExercises(workout: WorkoutLog, history: WorkoutLog[]): WorkoutLog {
+  if (!isProgramSessionKey(workout.sessionKey)) return workout;
+  const template = sessionTemplate(workout.sessionKey, workout.planWeek);
+  const draft = { ...workout, exercises: [] as ExerciseLog[] };
+  draft.exercises = template.exercises.map((exercise) => {
+    const existing = workout.exercises.find((item) => item.exerciseKey === exercise.exerciseKey);
+    if (existing) {
+      return {
+        ...existing,
+        name: exercise.name,
+        prescription: exercise.prescription,
+        repTarget: exercise.repTarget,
+        optional: Boolean(exercise.optional),
+        instructions: "",
+        targetWeight: null,
+        supersetId: null,
+      };
+    }
+    return loggedExercise(draft, history, {
+      exerciseKey: exercise.exerciseKey,
+      name: exercise.name,
+      prescription: exercise.prescription,
+      repTarget: exercise.repTarget,
+      optional: Boolean(exercise.optional),
+      instructions: "",
+      targetWeight: null,
+      sets: exercise.sets,
+      supersetId: null,
+    });
   });
   return draft;
 }
 
 export function lastWorkingWeight(exercise: ExerciseLog): number | null {
-  const weights = exercise.sets.flatMap((set) => (set.weight == null ? [] : [set.weight]));
+  const weights = exercise.sets.flatMap((set) => (isCompletedSet(set) && set.weight != null ? [set.weight] : []));
   if (weights.length === 0) return null;
   const counts = new Map<number, number>();
   for (const weight of weights) counts.set(weight, (counts.get(weight) ?? 0) + 1);
@@ -141,15 +347,11 @@ export function previousExercise(
 ): { workout: WorkoutLog; exercise: ExerciseLog } | null {
   for (const workout of earlierWorkouts(workouts, current)) {
     const exercise = workout.exercises.find(
-      (item) => item.exerciseKey === exerciseKey && item.status !== "skipped" && item.sets.some(hasEntry),
+      (item) => item.exerciseKey === exerciseKey && item.status !== "skipped" && item.sets.some(isCompletedSet),
     );
     if (exercise) return { workout, exercise };
   }
   return null;
-}
-
-function hasEntry(set: SetLog): boolean {
-  return set.weight != null || set.reps != null || set.rpe != null;
 }
 
 export function formatPerformance(exercise: ExerciseLog, unit: WeightUnit): string {
@@ -176,7 +378,7 @@ export interface WeightSuggestion {
 
 export function suggestedWeight(
   exerciseKey: string,
-  current: Pick<WorkoutLog, "id" | "date" | "unit">,
+  current: Pick<WorkoutLog, "id" | "date" | "unit"> & { planWeek?: number | null },
   history: WorkoutLog[],
 ): WeightSuggestion {
   const progressed = liftProgression(exerciseKey, current, history);
@@ -195,11 +397,20 @@ export function suggestedWeight(
     };
   }
 
-  const template = exerciseTemplate(exerciseKey);
+  const template =
+    current.planWeek === TESTING_WEEK
+      ? sessionTemplate("wednesday-squat", TESTING_WEEK).exercises.find((item) => item.exerciseKey === exerciseKey) ?? exerciseTemplate(exerciseKey)
+      : exerciseTemplate(exerciseKey);
   if (template?.suggestedWeightLb == null) {
     return { weight: null, note: "No stored suggestion. Enter the weight you use." };
   }
   const weight = convertWeight(template.suggestedWeightLb, "lb", current.unit);
+  if (current.planWeek === TESTING_WEEK && exerciseKey === "barbell-squat") {
+    return {
+      weight,
+      note: `Suggested start is ${formatWeight(weight, current.unit)} for 2 easy sets. Skip the session if your knee hurts.`,
+    };
+  }
   return {
     weight,
     note: startingSuggestion(exerciseKey, weight, current.unit),
@@ -225,7 +436,7 @@ function liftProgression(
   if (working == null) {
     return { weight: null, note: "The last session has no weight to suggest. Enter the load you want." };
   }
-  const sets = previous.exercise.sets.filter((set) => set.weight === working && set.reps != null);
+  const sets = previous.exercise.sets.filter((set) => isCompletedSet(set) && set.weight === working);
   const repsMet = sets.length >= target.sets && sets.every((set) => (set.reps ?? 0) >= target.reps);
   const rpes = sets.flatMap((set) => (set.rpe == null ? [] : [set.rpe]));
   const maxRpe = rpes.length === 0 ? null : Math.max(...rpes);
@@ -290,11 +501,15 @@ function startingSuggestion(exerciseKey: string, weight: number, unit: WeightUni
 
 export function previousSummary(
   exerciseKey: string,
-  current: Pick<WorkoutLog, "id" | "date" | "unit">,
+  current: Pick<WorkoutLog, "id" | "date" | "unit"> & { planWeek?: number | null },
   history: WorkoutLog[],
 ): string {
   const previous = previousExercise(history, current, exerciseKey);
   if (!previous) {
+    if (current.planWeek === TESTING_WEEK) {
+      const testing = sessionTemplate("wednesday-squat", TESTING_WEEK).exercises.find((item) => item.exerciseKey === exerciseKey);
+      if (testing?.baseline) return testing.baseline;
+    }
     return exerciseTemplate(exerciseKey)?.baseline ?? "No previous session for this exercise.";
   }
   const performed = formatPerformance(previous.exercise, previous.workout.unit);

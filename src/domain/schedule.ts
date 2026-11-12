@@ -7,7 +7,7 @@ import {
   sessionDate,
   weekPlan,
 } from "./runningProgram.ts";
-import { sessionTemplate, type SessionKey } from "./strengthProgram.ts";
+import { sessionTemplate, type ProgramSessionKey } from "./strengthProgram.ts";
 import { todayInputDate, type WorkoutLog } from "./workoutLog.ts";
 
 export interface ScheduleOverride {
@@ -17,11 +17,11 @@ export interface ScheduleOverride {
   date: string;
 }
 
-export type ItemStatus = "upcoming" | "today" | "done" | "skipped" | "missed";
+export type ItemStatus = "upcoming" | "today" | "done" | "skipped" | "missed" | "open";
 
 export interface CalendarItem {
   week: number;
-  kind: "strength" | "run";
+  kind: "strength" | "run" | "note";
   key: string;
   name: string;
   date: string;
@@ -43,13 +43,16 @@ export function weekItems(
   today = todayInputDate(),
 ): CalendarItem[] {
   const tuesday = sessionDate(start, week, "tuesday");
-  const strength: { key: SessionKey; dayOffset: number; order: number }[] = [
-    { key: "tuesday-bench", dayOffset: 0, order: 0 },
-    { key: "wednesday-squat", dayOffset: 1, order: 2 },
-    { key: "friday-secondary", dayOffset: 3, order: 3 },
-  ];
+  const plan = weekPlan(week);
+  const strength: { key: ProgramSessionKey; dayOffset: number; order: number }[] = plan.testing
+    ? [{ key: "wednesday-squat", dayOffset: 1, order: 2 }]
+    : [
+        { key: "tuesday-bench", dayOffset: 0, order: 0 },
+        { key: "wednesday-squat", dayOffset: 1, order: 2 },
+        { key: "friday-secondary", dayOffset: 3, order: 3 },
+      ];
   const items: CalendarItem[] = strength.map((session) => {
-    const template = sessionTemplate(session.key);
+    const template = sessionTemplate(session.key, week);
     const date = scheduledDate(overrides, week, "strength", session.key, addDays(tuesday, session.dayOffset));
     return {
       week,
@@ -62,7 +65,7 @@ export function weekItems(
       order: session.order,
     };
   });
-  for (const session of weekPlan(week).sessions) {
+  for (const session of plan.sessions) {
     const date = scheduledDate(overrides, week, "run", session.slot, sessionDate(start, week, session.slot));
     items.push({
       week,
@@ -71,9 +74,16 @@ export function weekItems(
       name: session.title,
       date,
       optional: Boolean(session.optional),
-      status: runStatus(runs, week, session.slot, date, today, Boolean(session.optional)),
+      status: runStatus(runs, week, session.slot, date, today, Boolean(session.optional), Boolean(session.postponable)),
       order: session.slot === "tuesday" ? 1 : session.slot === "friday" ? 4 : 5,
     });
+  }
+  if (plan.testing) {
+    items.push(
+      noteItem(week, "monday-rest", "Rest or light walk", addDays(tuesday, -1), today, 0),
+      noteItem(week, "thursday-rest", "Rest or easy walk", addDays(tuesday, 2), today, 3),
+      noteItem(week, "sunday-review", "Review the tests", addDays(tuesday, 5), today, 6),
+    );
   }
   return items.sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order);
 }
@@ -90,7 +100,7 @@ export function nextOpenItem(
     const number = week + offset;
     if (number > PROGRAM_WEEKS) break;
     const open = weekItems(start, number, overrides, workouts, runs, today).find(
-      (item) => item.date >= today && item.status !== "done" && item.status !== "skipped",
+      (item) => item.kind !== "note" && item.status !== "done" && item.status !== "skipped" && (item.date >= today || item.status === "open"),
     );
     if (open) return open;
   }
@@ -108,6 +118,8 @@ export function missedRequiredRuns(
   let count = 0;
   for (let week = 1; week <= PROGRAM_WEEKS; week += 1) {
     for (const slot of ["tuesday", "friday"] as const) {
+      const session = weekPlan(week).sessions.find((item) => item.slot === slot);
+      if (session?.postponable) continue;
       const date = scheduledDate(overrides, week, "run", slot, sessionDate(start, week, slot));
       if (date >= beforeDate || date < from || date >= today) continue;
       if (!planRunFor(runs, week, slot)) count += 1;
@@ -155,11 +167,35 @@ function sameStrengthPlan(workout: WorkoutLog, start: string, week: number, date
   return workout.date === date || programWeek(start, workout.date) === week;
 }
 
-function runStatus(runs: RunWorkout[], week: number, slot: PlanSlot, date: string, today: string, optional: boolean): ItemStatus {
+function noteItem(week: number, key: string, name: string, date: string, today: string, order: number): CalendarItem {
+  return {
+    week,
+    kind: "note",
+    key,
+    name,
+    date,
+    optional: true,
+    status: date < today ? "skipped" : date === today ? "today" : "upcoming",
+    order,
+  };
+}
+
+function runStatus(
+  runs: RunWorkout[],
+  week: number,
+  slot: PlanSlot,
+  date: string,
+  today: string,
+  optional: boolean,
+  postponable: boolean,
+): ItemStatus {
   const saved = planRunFor(runs, week, slot);
   if (saved?.status === "skipped") return "skipped";
   if (saved) return "done";
-  if (date < today) return optional ? "skipped" : "missed";
+  if (date < today) {
+    if (postponable) return "open";
+    return optional ? "skipped" : "missed";
+  }
   if (date === today) return "today";
   return "upcoming";
 }

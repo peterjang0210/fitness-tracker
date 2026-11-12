@@ -1,9 +1,16 @@
 import type { WeightUnit } from "../storage/appData.ts";
 
-export type SessionKey = "tuesday-bench" | "wednesday-squat" | "friday-secondary";
+export const TESTING_WEEK = 17;
+
+export type ProgramSessionKey = "tuesday-bench" | "wednesday-squat" | "friday-secondary";
+export type SessionKey = ProgramSessionKey | "custom";
+
+export function isProgramSessionKey(value: string | null): value is ProgramSessionKey {
+  return value === "tuesday-bench" || value === "wednesday-squat" || value === "friday-secondary";
+}
 
 export function isSessionKey(value: string | null): value is SessionKey {
-  return value === "tuesday-bench" || value === "wednesday-squat" || value === "friday-secondary";
+  return isProgramSessionKey(value) || value === "custom";
 }
 
 export interface ExerciseTemplate {
@@ -18,7 +25,7 @@ export interface ExerciseTemplate {
 }
 
 export interface SessionTemplate {
-  key: SessionKey;
+  key: ProgramSessionKey;
   name: string;
   day: string;
   summary: string;
@@ -203,7 +210,27 @@ export const sessionTemplates: SessionTemplate[] = [
   },
 ];
 
-export function sessionTemplate(key: SessionKey): SessionTemplate {
+const testingSquat: SessionTemplate = {
+  key: "wednesday-squat",
+  name: "Easy squat",
+  day: "Wednesday",
+  summary: "About half of a normal lower-body day. Two easy sets, and no leg press, curls, or extensions.",
+  exercises: [
+    {
+      exerciseKey: "barbell-squat",
+      name: "Barbell squat",
+      sets: 2,
+      repTarget: "5",
+      prescription: "2×5 easy",
+      suggestedWeightLb: 115,
+      baseline:
+        "Testing week keeps the squat and drops the lower-body accessories, which cuts this session by about half. Skip it if your knee hurts. The mile was yesterday and the 5K is Friday.",
+    },
+  ],
+};
+
+export function sessionTemplate(key: ProgramSessionKey, week?: number | null): SessionTemplate {
+  if (week === TESTING_WEEK && key === "wednesday-squat") return testingSquat;
   const template = sessionTemplates.find((item) => item.key === key);
   if (!template) throw new Error(`Unknown session ${key}`);
   return template;

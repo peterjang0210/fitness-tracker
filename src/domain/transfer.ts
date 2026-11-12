@@ -33,7 +33,7 @@ function table(rows: (string | number | null | undefined)[][]): string {
 
 export function strengthCsv(data: AppData): string {
   const rows: (string | number | null)[][] = [
-    ["date", "session", "exercise", "exerciseKey", "set", "weight", "unit", "reps", "rpe", "status", "notes"],
+    ["date", "session", "exercise", "exerciseKey", "set", "weight", "unit", "reps", "rpe", "status", "notes", "setStatus", "setNotes"],
   ];
   for (const workout of data.workouts) {
     for (const exercise of workout.exercises) {
@@ -50,6 +50,8 @@ export function strengthCsv(data: AppData): string {
           set.rpe,
           exercise.status,
           exercise.notes,
+          set.status,
+          set.notes,
         ]);
       });
     }
@@ -66,6 +68,9 @@ export function runningCsv(data: AppData): string {
       "rpe",
       "planWeek",
       "planSlot",
+      "testKind",
+      "incline",
+      "continuous",
       "runningMiles",
       "runningMinutes",
       "paceSeconds",
@@ -88,6 +93,9 @@ export function runningCsv(data: AppData): string {
         run.rpe,
         run.planWeek,
         run.planSlot,
+        run.testKind,
+        run.incline,
+        run.continuous == null ? null : run.continuous ? "continuous" : "included walking",
         Math.round(totals.runningMiles * 10000) / 10000,
         Math.round(totals.runningMinutes * 100) / 100,
         totals.paceSecondsPerMile == null ? null : Math.round(totals.paceSecondsPerMile),

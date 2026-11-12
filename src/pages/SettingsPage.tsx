@@ -4,7 +4,8 @@ import { Page } from "../components/layout/Page.tsx";
 import { sessionTemplates } from "../domain/strengthProgram.ts";
 import { backupFilename, downloadText, parseBackup, runningCsv, strengthCsv } from "../domain/transfer.ts";
 import { todayInputDate } from "../domain/workoutLog.ts";
-import { STORAGE_KEY, type AppData, type LibraryEdit, type ThemePreference, type WeightUnit } from "../storage/appData.ts";
+import { isBuiltinExercise, mergedLibrary } from "../domain/exerciseLibrary.ts";
+import { exerciseCategories, STORAGE_KEY, type AppData, type ExerciseCategory, type LibraryEdit, type LibraryExercise, type ThemePreference, type WeightUnit } from "../storage/appData.ts";
 import { useAppState } from "../state/useAppState.ts";
 
 const themeOptions: { value: ThemePreference; label: string; hint: string }[] = [
@@ -27,10 +28,14 @@ export function SettingsPage() {
     runningProgramStart = "2026-11-03",
     scheduleOverrides = [],
     libraryEdits = [],
+    exerciseLibrary = [],
+    futureSessions = [],
     storageError,
     updateSettings,
     setRunningProgramStart,
     setLibraryEdit,
+    saveLibraryExercise,
+    deleteLibraryExercise,
     replaceData,
     clearTrainingLog,
   } = useAppState();
@@ -49,6 +54,8 @@ export function SettingsPage() {
     runningProgramStart,
     scheduleOverrides,
     libraryEdits,
+    exerciseLibrary,
+    futureSessions,
   };
 
   function exportJson() {
@@ -101,6 +108,7 @@ export function SettingsPage() {
           </label>
         </article>
         <LibraryEditor edits={libraryEdits} onEdit={setLibraryEdit} />
+        <ExerciseLibraryEditor exercises={exerciseLibrary} onSave={saveLibraryExercise} onDelete={deleteLibraryExercise} />
         <article className="panel">
           <h2>Backup</h2>
           <p>
@@ -155,7 +163,7 @@ export function SettingsPage() {
         </article>
         <article className="panel">
           <h2>Clear log</h2>
-          <p>This removes workouts, runs, templates, schedule moves, and exercise wording saved for new sessions. Theme and units stay.</p>
+          <p>This removes workouts, runs, templates, schedule moves, custom exercises, future exercise lists, and exercise wording saved for new sessions. Theme and units stay.</p>
           {confirmClear ? (
             <div className="inline-actions">
               <button
@@ -187,6 +195,127 @@ export function SettingsPage() {
         </article>
       </div>
     </Page>
+  );
+}
+
+function ExerciseLibraryEditor({
+  exercises,
+  onSave,
+  onDelete,
+}: {
+  exercises: LibraryExercise[];
+  onSave: (exercise: LibraryExercise) => void;
+  onDelete: (id: string) => void;
+}) {
+  const library = mergedLibrary(exercises);
+  return (
+    <article className="panel">
+      <h2>Exercise library</h2>
+      <p>These exercises can be added to any workout. Editing one here does not rewrite workouts you already saved. The original program template stays available from each workout.</p>
+      {library.map((exercise) => (
+        <details key={exercise.id} className="library-session">
+          <summary>
+            {exercise.name} · {exercise.muscleGroup}
+          </summary>
+          <LibraryExerciseFields exercise={exercise} custom={!isBuiltinExercise(exercise.id)} onSave={onSave} onDelete={onDelete} />
+        </details>
+      ))}
+    </article>
+  );
+}
+
+function LibraryExerciseFields({
+  exercise,
+  custom,
+  onSave,
+  onDelete,
+}: {
+  exercise: LibraryExercise;
+  custom: boolean;
+  onSave: (exercise: LibraryExercise) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [draft, setDraft] = useState(exercise);
+  function commit(next: LibraryExercise = draft) {
+    if (!next.name.trim()) return;
+    onSave({ ...next, name: next.name.trim(), defaultSets: Math.max(1, Math.min(12, Math.round(next.defaultSets) || 3)) });
+  }
+  return (
+    <div className="edit-grid">
+      <label className="field">
+        <span>Name</span>
+        <input
+          value={draft.name}
+          onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+          onBlur={() => commit()}
+        />
+      </label>
+      <label className="field">
+        <span>Muscle group</span>
+        <input
+          value={draft.muscleGroup}
+          onChange={(event) => setDraft({ ...draft, muscleGroup: event.target.value })}
+          onBlur={() => commit()}
+        />
+      </label>
+      <label className="field">
+        <span>Category</span>
+        <select
+          value={draft.category}
+          onChange={(event) => {
+            const next = { ...draft, category: event.target.value as ExerciseCategory };
+            setDraft(next);
+            commit(next);
+          }}
+        >
+          {exerciseCategories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        <span>Equipment</span>
+        <input
+          value={draft.equipment}
+          onChange={(event) => setDraft({ ...draft, equipment: event.target.value })}
+          onBlur={() => commit()}
+        />
+      </label>
+      <label className="field">
+        <span>Default sets</span>
+        <input
+          type="number"
+          min="1"
+          max="12"
+          value={draft.defaultSets}
+          onChange={(event) => setDraft({ ...draft, defaultSets: Number(event.target.value) || 1 })}
+          onBlur={() => commit()}
+        />
+      </label>
+      <label className="field">
+        <span>Rep target</span>
+        <input
+          value={draft.defaultReps}
+          onChange={(event) => setDraft({ ...draft, defaultReps: event.target.value })}
+          onBlur={() => commit()}
+        />
+      </label>
+      <label className="field grow">
+        <span>Instructions</span>
+        <input
+          value={draft.instructions}
+          onChange={(event) => setDraft({ ...draft, instructions: event.target.value })}
+          onBlur={() => commit()}
+        />
+      </label>
+      {custom ? (
+        <button type="button" className="button" onClick={() => onDelete(exercise.id)}>
+          Remove from library
+        </button>
+      ) : null}
+    </div>
   );
 }
 

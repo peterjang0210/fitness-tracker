@@ -4,7 +4,7 @@ import { Page } from "../components/layout/Page.tsx";
 import { RunEditor } from "../components/running/RunEditor.tsx";
 import { RunningPlan } from "../components/running/RunningPlan.tsx";
 import { scheduledDate } from "../domain/schedule.ts";
-import { planRunFor, plannedRun, sessionDate, weekPlan } from "../domain/runningProgram.ts";
+import { manualTest, planRunFor, plannedRun, PROGRAM_WEEKS, sessionDate, weekPlan } from "../domain/runningProgram.ts";
 import { formatDisplayDate } from "../domain/workoutLog.ts";
 import {
   benchmarkTotals,
@@ -48,14 +48,14 @@ export function RunningPage() {
       const found = runs.find((run) => run.id === edit);
       if (found) {
         setDraft(found);
-        setSaved(false);
+        setSaved(true);
       }
       setParams({}, { replace: true });
       return;
     }
     const slot = params.get("slot");
     const week = Number(params.get("week"));
-    if ((slot !== "tuesday" && slot !== "friday" && slot !== "weekend") || week < 1 || week > 16) return;
+    if ((slot !== "tuesday" && slot !== "friday" && slot !== "weekend") || week < 1 || week > PROGRAM_WEEKS) return;
     const session = weekPlan(week).sessions.find((item) => item.slot === slot);
     if (!session) return;
     const difficulty = params.get("difficulty");
@@ -86,7 +86,7 @@ export function RunningPage() {
   return (
     <Page
       eyebrow="Treadmill"
-      title="Running"
+      title="Running log"
       lede="Distance is minutes × mph ÷ 60. Warm-up, walking recovery, and cooldown stay out of the running distance and pace."
     >
       {draft ? (
@@ -142,6 +142,28 @@ export function RunningPage() {
               }}
             >
               New run from benchmark
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => {
+                setDraft(manualTest("mile"));
+                setSaved(false);
+                setTemplateSaved(false);
+              }}
+            >
+              Log a mile test
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => {
+                setDraft(manualTest("fivek"));
+                setSaved(false);
+                setTemplateSaved(false);
+              }}
+            >
+              Log a 5K test
             </button>
             <button
               type="button"
@@ -203,7 +225,11 @@ export function RunningPage() {
                         </p>
                       </div>
                       <div className="inline-actions">
-                        <button type="button" className="button" onClick={() => changeDraft(structuredClone(run))}>
+                        <button type="button" className="button" onClick={() => {
+                          setDraft(structuredClone(run));
+                          setSaved(true);
+                          setTemplateSaved(false);
+                        }}>
                           Edit
                         </button>
                         <button type="button" className="button" onClick={() => changeDraft(cloneRun(run, `${run.name} copy`))}>

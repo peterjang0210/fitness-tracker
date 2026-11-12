@@ -1,7 +1,8 @@
-import { FIVE_K_MILES, addDays, currentProgramWeek, planRunFor, sessionDate, weekPlan } from "./runningProgram.ts";
-import { durationMinutes, runTotals, segmentDistance, type PlanSlot, type RunWorkout } from "./running.ts";
+import { FIVE_K_MILES, addDays } from "./runningProgram.ts";
+import { nextOpenItem } from "./schedule.ts";
+import { durationMinutes, runTotals, segmentDistance, type RunWorkout } from "./running.ts";
 import { convertWeight } from "./strengthProgram.ts";
-import { lastWorkingWeight, todayInputDate, type WorkoutLog } from "./workoutLog.ts";
+import { isCompletedSet, lastWorkingWeight, todayInputDate, type WorkoutLog } from "./workoutLog.ts";
 import type { WeightUnit } from "../storage/appData.ts";
 
 export const BENCH_KEY = "flat-bench";
@@ -77,7 +78,7 @@ export function liftSeries(workouts: WorkoutLog[], exerciseKey: string, display:
     const working = lastWorkingWeight(exercise);
     let best = 0;
     for (const set of exercise.sets) {
-      if (set.weight == null || set.reps == null || set.reps <= 0) continue;
+      if (!isCompletedSet(set) || set.weight == null || set.reps == null) continue;
       best = Math.max(best, epley(set.weight, set.reps));
     }
     if (working == null && best === 0) continue;
@@ -98,7 +99,7 @@ export function weeklyVolume(workouts: WorkoutLog[], keys: Set<string>, display:
     for (const exercise of workout.exercises) {
       if (!keys.has(exercise.exerciseKey) || exercise.status === "skipped") continue;
       for (const set of exercise.sets) {
-        if (set.weight == null || set.reps == null || set.reps <= 0) continue;
+        if (!isCompletedSet(set) || set.weight == null || set.reps == null) continue;
         volume += displayWeight(set.weight, workout.unit, display) * set.reps;
       }
     }
@@ -111,13 +112,35 @@ export function weeklyVolume(workouts: WorkoutLog[], keys: Set<string>, display:
     .map(([date, volume]) => ({ date, label: shortDate(date), volume: Math.round(volume) }));
 }
 
+export interface BestSet {
+  date: string;
+  weight: number;
+  reps: number;
+  oneRm: number;
+}
+
+export function bestSet(workouts: WorkoutLog[], exerciseKey: string, display: WeightUnit): BestSet | null {
+  let best: BestSet | null = null;
+  for (const workout of workouts) {
+    const exercise = workout.exercises.find((item) => item.exerciseKey === exerciseKey && item.status !== "skipped");
+    if (!exercise) continue;
+    for (const set of exercise.sets) {
+      if (!isCompletedSet(set) || set.weight == null || set.reps == null) continue;
+      const weight = displayWeight(set.weight, workout.unit, display);
+      const oneRm = displayWeight(epley(set.weight, set.reps), workout.unit, display);
+      if (!best || oneRm > best.oneRm) best = { date: workout.date, weight, reps: set.reps, oneRm: Math.round(oneRm) };
+    }
+  }
+  return best;
+}
+
 export function bestSquatForGoal(workouts: WorkoutLog[], display: WeightUnit): number | null {
   let best: number | null = null;
   for (const workout of workouts) {
     const exercise = workout.exercises.find((item) => item.exerciseKey === SQUAT_KEY && item.status !== "skipped");
     if (!exercise) continue;
     for (const set of exercise.sets) {
-      if (set.weight == null || set.reps == null || set.reps < 3) continue;
+      if (!isCompletedSet(set) || set.weight == null || set.reps == null || set.reps < 3) continue;
       const shown = displayWeight(set.weight, workout.unit, display);
       best = best == null ? shown : Math.max(best, shown);
     }
@@ -208,8 +231,66 @@ export function runEffortSeries(runs: RunWorkout[]): {
   };
 }
 
+export interface ContinuousBlock {
+  date: string;
+  miles: number;
+  pace: number | null;
+}
+
+export function continuousBlocks(runs: RunWorkout[]): ContinuousBlock[] {
+  const blocks: ContinuousBlock[] = [];
+  for (const run of loggedRuns(runs)) {
+    let miles = 0;
+    let seconds = 0;
+    const flush = () => {
+      if (miles > 0) blocks.push({ date: run.date, miles: Math.round(miles * 1000) / 1000, pace: seconds / miles });
+      miles = 0;
+      seconds = 0;
+    };
+    for (const segment of run.segments) {
+      if (segment.type !== "running") {
+        flush();
+        continue;
+      }
+      miles += segmentDistance(segment);
+      seconds += durationMinutes(segment) * 60;
+    }
+    flush();
+  }
+  return blocks;
+}
+
+export function longestContinuous(runs: RunWorkout[]): ContinuousBlock | null {
+  return continuousBlocks(runs).reduce<ContinuousBlock | null>((best, block) => (best == null || block.miles > best.miles ? block : best), null);
+}
+
+export function averageRunningPace(runs: RunWorkout[]): number | null {
+  let miles = 0;
+  let seconds = 0;
+  for (const run of loggedRuns(runs)) {
+    const totals = runTotals(run.segments);
+    miles += totals.runningMiles;
+    seconds += totals.runningMinutes * 60;
+  }
+  return miles > 0 ? seconds / miles : null;
+}
+
+export function weeklyRunningMiles(runs: RunWorkout[], today = todayInputDate()): number {
+  const start = weekStart(today);
+  let miles = 0;
+  for (const run of loggedRuns(runs)) {
+    if (weekStart(run.date) !== start) continue;
+    miles += runTotals(run.segments).runningMiles;
+  }
+  return Math.round(miles * 100) / 100;
+}
+
 export function fastestPace(points: EffortPoint[]): EffortPoint | null {
   return points.reduce<EffortPoint | null>((best, point) => (best == null || point.pace < best.pace ? point : best), null);
+}
+
+export function latestEffort(points: EffortPoint[]): EffortPoint | null {
+  return points.at(-1) ?? null;
 }
 
 export function filterPoints<T extends { date: string }>(points: T[], from: string | null, to: string | null): T[] {
@@ -221,46 +302,9 @@ export interface NextSession {
   name: string;
 }
 
-interface SessionCandidate extends NextSession {
-  strengthKey?: "tuesday-bench" | "wednesday-squat" | "friday-secondary";
-  slot?: PlanSlot;
-}
-
 export function nextSession(workouts: WorkoutLog[], runs: RunWorkout[], start: string, today = todayInputDate()): NextSession | null {
-  const week = currentProgramWeek(start, today);
-  for (let offset = 0; offset < 3; offset += 1) {
-    const number = week + offset;
-    if (number > 16) break;
-    const plan = weekPlan(number);
-    const tuesday = sessionDate(start, number, "tuesday");
-    const candidates: SessionCandidate[] = [
-      { date: tuesday, name: "Bench and upper body", strengthKey: "tuesday-bench" },
-      { date: addDays(tuesday, 1), name: "Squat and lower body", strengthKey: "wednesday-squat" },
-      { date: sessionDate(start, number, "friday"), name: "Secondary squat and upper body", strengthKey: "friday-secondary" },
-    ];
-    for (const session of plan.sessions) {
-      candidates.push({ date: sessionDate(start, number, session.slot), name: session.title, slot: session.slot });
-    }
-    candidates.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
-    for (const candidate of candidates) {
-      if (candidate.date < today) continue;
-      if (isDone(candidate, workouts, runs, tuesday, number)) continue;
-      return { date: candidate.date, name: candidate.name };
-    }
-  }
-  return null;
-}
-
-function isDone(candidate: SessionCandidate, workouts: WorkoutLog[], runs: RunWorkout[], tuesday: string, week: number): boolean {
-  const sunday = addDays(tuesday, 6);
-  if (candidate.strengthKey) {
-    return workouts.some(
-      (workout) => workout.sessionKey === candidate.strengthKey && workout.date >= tuesday && workout.date <= sunday,
-    );
-  }
-  if (!candidate.slot) return false;
-  const saved = planRunFor(runs, week, candidate.slot);
-  return saved != null;
+  const item = nextOpenItem(start, [], workouts, runs, today);
+  return item ? { date: item.date, name: item.name } : null;
 }
 
 export function recentStrength(workouts: WorkoutLog[]): WorkoutLog | null {

@@ -16,6 +16,7 @@ import {
 import { missedRequiredRuns, scheduledDate, type ScheduleOverride } from "../../domain/schedule.ts";
 import type { RunDifficulty, RunWorkout } from "../../domain/running.ts";
 import type { WorkoutLog } from "../../domain/workoutLog.ts";
+import { TestGuide } from "./TestGuide.tsx";
 
 const difficulties: { value: RunDifficulty; label: string }[] = [
   { value: "easier", label: "Easier" },
@@ -46,7 +47,7 @@ export function RunningPlan({
 
   return (
     <section className="panel plan-panel">
-      <h2>16-week block</h2>
+      <h2>Training block</h2>
       <p>
         Targets stay ahead of the workouts: a 7:00 mile is {formatMph(MILE_GOAL_MPH)}, and a sub-25 5K is{" "}
         {formatMph(FIVE_K_GOAL_MPH)}. Week {week} does not use those speeds.
@@ -63,7 +64,7 @@ export function RunningPlan({
           <strong>
             Week {week}
             {week === todayWeek ? " · current" : ""}
-            {plan.recovery ? " · recovery" : ""}
+            {plan.testing ? " · testing" : plan.recovery ? " · recovery" : ""}
           </strong>
           <button
             type="button"
@@ -93,6 +94,12 @@ export function RunningPlan({
           />
         ))}
       </div>
+      {plan.testing ? (
+        <>
+          <p className="callout">Do not run a maximal test if your knee hurts or you are unusually sore. Move the date. A postponed test stays open and is not marked missed.</p>
+          <TestGuide />
+        </>
+      ) : null}
     </section>
   );
 }
@@ -122,10 +129,13 @@ function PlanCard({
   const chosen = saved ? (saved.difficulty ?? "planned") : difficulty;
 
   return (
-    <article className="session-card">
+    <article className={saved ? `session-card is-${saved.status === "skipped" ? "skipped" : "done"}` : "session-card"}>
       <span className="eyebrow">
         {session.slot}
         {session.optional ? " · optional" : ""}
+      </span>
+      <span className={`status-pill is-${saved ? (saved.status === "skipped" ? "skipped" : "done") : "upcoming"}`}>
+        {saved ? (saved.status === "skipped" ? "Skipped" : "Logged") : "Scheduled"}
       </span>
       <strong>{session.title}</strong>
       <span>{formatDisplayDate(date)}</span>
@@ -134,7 +144,7 @@ function PlanCard({
       {saved ? (
         <span className="meta">{saved.status === "skipped" ? "Skipped" : `Logged${saved.rpe == null ? "" : ` · RPE ${saved.rpe}`}`}</span>
       ) : null}
-      {saved ? null : (
+      {saved || session.fixed ? null : (
         <div className="inline-actions">
           {difficulties.map((option) => (
             <button

@@ -2,7 +2,7 @@ import { DEFAULT_PROGRAM_START } from "../domain/runningProgram.ts";
 import { normalizeRun, normalizeRunTemplate, type RunTemplate, type RunWorkout } from "../domain/running.ts";
 import type { ScheduleOverride } from "../domain/schedule.ts";
 import type { WorkoutLog } from "../domain/workoutLog.ts";
-import type { SessionKey } from "../domain/strengthProgram.ts";
+import { TESTING_WEEK, type ProgramSessionKey, type SessionKey } from "../domain/strengthProgram.ts";
 
 export const STORAGE_KEY = "iron-mile.v1";
 
@@ -28,10 +28,43 @@ export interface AppData {
   runningProgramStart: string;
   scheduleOverrides: ScheduleOverride[];
   libraryEdits: LibraryEdit[];
+  exerciseLibrary: LibraryExercise[];
+  futureSessions: FutureSessionPlan[];
+}
+
+export const exerciseCategories = ["compound", "isolation", "cardio", "other"] as const;
+export type ExerciseCategory = (typeof exerciseCategories)[number];
+
+export interface LibraryExercise {
+  id: string;
+  name: string;
+  muscleGroup: string;
+  category: ExerciseCategory;
+  equipment: string;
+  instructions: string;
+  defaultSets: number;
+  defaultReps: string;
+}
+
+export interface FutureExercisePlan {
+  exerciseKey: string;
+  name: string;
+  prescription: string;
+  repTarget: string;
+  optional: boolean;
+  instructions: string;
+  sets: number;
+  supersetGroup: string | null;
+  targetWeight: number | null;
+}
+
+export interface FutureSessionPlan {
+  sessionKey: ProgramSessionKey;
+  exercises: FutureExercisePlan[];
 }
 
 export interface LibraryEdit {
-  sessionKey: SessionKey;
+  sessionKey: ProgramSessionKey;
   exerciseKey: string;
   name: string;
   prescription: string;
@@ -51,6 +84,8 @@ export const defaultAppData: AppData = {
   runningProgramStart: DEFAULT_PROGRAM_START,
   scheduleOverrides: [],
   libraryEdits: [],
+  exerciseLibrary: [],
+  futureSessions: [],
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -114,16 +149,36 @@ export function normalizeAppData(value: unknown): AppData {
           return normalized ? [normalized] : [];
         })
       : [],
+    exerciseLibrary: Array.isArray(value.exerciseLibrary)
+      ? value.exerciseLibrary.flatMap((item) => {
+          const normalized = normalizeLibraryExercise(item);
+          return normalized ? [normalized] : [];
+        })
+      : [],
+    futureSessions: Array.isArray(value.futureSessions)
+      ? value.futureSessions.flatMap((item) => {
+          const normalized = normalizeFutureSession(item);
+          return normalized ? [normalized] : [];
+        })
+      : [],
   };
 }
 
-const sessionKeys: SessionKey[] = ["tuesday-bench", "wednesday-squat", "friday-secondary"];
+const programSessionKeys: ProgramSessionKey[] = ["tuesday-bench", "wednesday-squat", "friday-secondary"];
+
+function isProgramKey(value: unknown): value is ProgramSessionKey {
+  return programSessionKeys.includes(value as ProgramSessionKey);
+}
+
+function isWorkoutSession(value: unknown): value is SessionKey {
+  return isProgramKey(value) || value === "custom";
+}
 const statuses = ["pending", "completed", "skipped"] as const;
 
 function normalizeWorkout(value: unknown): WorkoutLog | null {
   if (!isRecord(value) || typeof value.id !== "string" || typeof value.date !== "string") return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value.date)) return null;
-  if (!sessionKeys.includes(value.sessionKey as SessionKey)) return null;
+  if (!isWorkoutSession(value.sessionKey)) return null;
   if (!Array.isArray(value.exercises)) return null;
 
   const exercises = value.exercises.flatMap((exercise) => {
@@ -140,7 +195,7 @@ function normalizeWorkout(value: unknown): WorkoutLog | null {
     unit: isWeightUnit(value.unit) ? value.unit : "lb",
     exercises,
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date(0).toISOString(),
-    planWeek: typeof value.planWeek === "number" && value.planWeek >= 1 && value.planWeek <= 16 ? value.planWeek : null,
+    planWeek: typeof value.planWeek === "number" && value.planWeek >= 1 && value.planWeek <= TESTING_WEEK ? value.planWeek : null,
   };
 }
 
@@ -150,10 +205,10 @@ function normalizeOverride(value: unknown): ScheduleOverride | null {
   const kind = value.kind;
   const key = value.key;
   const date = value.date;
-  if (typeof week !== "number" || week < 1 || week > 16) return null;
+  if (typeof week !== "number" || week < 1 || week > TESTING_WEEK) return null;
   if (kind !== "strength" && kind !== "run") return null;
   if (typeof key !== "string") return null;
-  if (kind === "strength" && !sessionKeys.includes(key as SessionKey)) return null;
+  if (kind === "strength" && !isProgramKey(key)) return null;
   if (kind === "run" && key !== "tuesday" && key !== "friday" && key !== "weekend") return null;
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   return { week, kind, key, date };
@@ -161,10 +216,10 @@ function normalizeOverride(value: unknown): ScheduleOverride | null {
 
 function normalizeLibraryEdit(value: unknown): LibraryEdit | null {
   if (!isRecord(value)) return null;
-  if (!sessionKeys.includes(value.sessionKey as SessionKey)) return null;
+  if (!isProgramKey(value.sessionKey)) return null;
   if (typeof value.exerciseKey !== "string" || !value.exerciseKey.trim()) return null;
   return {
-    sessionKey: value.sessionKey as SessionKey,
+    sessionKey: value.sessionKey,
     exerciseKey: value.exerciseKey,
     name: typeof value.name === "string" ? value.name : "",
     prescription: typeof value.prescription === "string" ? value.prescription : "",
@@ -190,18 +245,72 @@ function normalizeExercise(value: unknown): WorkoutLog["exercises"][number] | nu
       ? (value.status as (typeof statuses)[number])
       : "pending",
     notes: typeof value.notes === "string" ? value.notes : "",
+    instructions: typeof value.instructions === "string" ? value.instructions : "",
+    targetWeight: finiteNumber(value.targetWeight),
     supersetId: typeof value.supersetId === "string" ? value.supersetId : null,
-    sets: sets.length > 0 ? sets : [{ id: `${value.id}-set`, weight: null, reps: null, rpe: null }],
+    sets: sets.length > 0 ? sets : [{ id: `${value.id}-set`, weight: null, reps: null, rpe: null, notes: "", status: "pending" }],
   };
 }
 
 function normalizeSet(value: unknown): WorkoutLog["exercises"][number]["sets"][number] | null {
   if (!isRecord(value) || typeof value.id !== "string") return null;
+  const reps = finiteNumber(value.reps);
+  const status =
+    value.status === "completed" || value.status === "pending" || value.status === "skipped"
+      ? value.status
+      : reps != null && reps > 0
+        ? "completed"
+        : "pending";
   return {
     id: value.id,
     weight: finiteNumber(value.weight),
-    reps: finiteNumber(value.reps),
+    reps,
     rpe: finiteNumber(value.rpe),
+    notes: typeof value.notes === "string" ? value.notes : "",
+    status,
+  };
+}
+
+function normalizeLibraryExercise(value: unknown): LibraryExercise | null {
+  if (!isRecord(value) || typeof value.id !== "string" || !value.id.trim()) return null;
+  if (typeof value.name !== "string" || !value.name.trim()) return null;
+  const sets = typeof value.defaultSets === "number" && value.defaultSets >= 1 && value.defaultSets <= 12 ? Math.round(value.defaultSets) : 3;
+  const category = exerciseCategories.includes(value.category as ExerciseCategory) ? (value.category as ExerciseCategory) : "other";
+  return {
+    id: value.id,
+    name: value.name.trim(),
+    muscleGroup: typeof value.muscleGroup === "string" ? value.muscleGroup : "",
+    category,
+    equipment: typeof value.equipment === "string" ? value.equipment : "",
+    instructions: typeof value.instructions === "string" ? value.instructions : "",
+    defaultSets: sets,
+    defaultReps: typeof value.defaultReps === "string" ? value.defaultReps : "",
+  };
+}
+
+function normalizeFutureSession(value: unknown): FutureSessionPlan | null {
+  if (!isRecord(value) || !isProgramKey(value.sessionKey) || !Array.isArray(value.exercises)) return null;
+  const exercises = value.exercises.flatMap((item) => {
+    const normalized = normalizeFutureExercise(item);
+    return normalized ? [normalized] : [];
+  });
+  return { sessionKey: value.sessionKey, exercises };
+}
+
+function normalizeFutureExercise(value: unknown): FutureExercisePlan | null {
+  if (!isRecord(value) || typeof value.exerciseKey !== "string" || !value.exerciseKey.trim()) return null;
+  if (typeof value.name !== "string" || !value.name.trim()) return null;
+  const sets = typeof value.sets === "number" && value.sets >= 1 && value.sets <= 12 ? Math.round(value.sets) : 3;
+  return {
+    exerciseKey: value.exerciseKey,
+    name: value.name.trim(),
+    prescription: typeof value.prescription === "string" ? value.prescription : "",
+    repTarget: typeof value.repTarget === "string" ? value.repTarget : "",
+    optional: value.optional === true,
+    instructions: typeof value.instructions === "string" ? value.instructions : "",
+    sets,
+    supersetGroup: typeof value.supersetGroup === "string" ? value.supersetGroup : null,
+    targetWeight: finiteNumber(value.targetWeight),
   };
 }
 

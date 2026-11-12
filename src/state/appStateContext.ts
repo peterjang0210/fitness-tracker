@@ -2,7 +2,7 @@ import { createContext } from "react";
 import type { RunTemplate, RunWorkout } from "../domain/running.ts";
 import type { ScheduleOverride } from "../domain/schedule.ts";
 import type { WorkoutLog } from "../domain/workoutLog.ts";
-import type { AppData, LibraryEdit, Settings, ThemePreference, WeightUnit } from "../storage/appData.ts";
+import type { AppData, FutureSessionPlan, LibraryEdit, LibraryExercise, Settings, ThemePreference, WeightUnit } from "../storage/appData.ts";
 
 export interface SettingsPatch {
   theme?: ThemePreference;
@@ -25,9 +25,14 @@ export interface AppState {
   runningProgramStart: string;
   scheduleOverrides: ScheduleOverride[];
   libraryEdits: LibraryEdit[];
+  exerciseLibrary: LibraryExercise[];
+  futureSessions: FutureSessionPlan[];
   setRunningProgramStart: (date: string) => void;
   setSessionDate: (override: ScheduleOverride) => void;
   setLibraryEdit: (edit: LibraryEdit) => void;
+  saveLibraryExercise: (exercise: LibraryExercise) => void;
+  deleteLibraryExercise: (exerciseId: string) => void;
+  saveFutureSession: (plan: FutureSessionPlan) => void;
   replaceData: (data: AppData) => void;
   clearTrainingLog: () => void;
 }

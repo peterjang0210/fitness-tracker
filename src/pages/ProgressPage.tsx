@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Page } from "../components/layout/Page.tsx";
 import { TrendChart } from "../components/progress/TrendChart.tsx";
+import { TestGuide } from "../components/running/TestGuide.tsx";
 import {
   BENCH_GOAL_LB,
   BENCH_KEY,
@@ -17,6 +18,9 @@ import {
   weeklyVolume,
 } from "../domain/progress.ts";
 import { FIVE_K_MILES } from "../domain/runningProgram.ts";
+import { formatClock, formatMiles, formatPace, runTotals } from "../domain/running.ts";
+import { formatDisplayDate } from "../domain/workoutLog.ts";
+import { Link } from "react-router-dom";
 import { convertWeight } from "../domain/strengthProgram.ts";
 import { useAppState } from "../state/useAppState.ts";
 
@@ -43,6 +47,10 @@ export function ProgressPage() {
   const benchGoal = convertWeight(BENCH_GOAL_LB, "lb", unit);
   const squatGoal = convertWeight(SQUAT_GOAL_LB, "lb", unit);
   const fiveKPace = Math.round(FIVE_K_GOAL_SECONDS / FIVE_K_MILES);
+  const tests = runs
+    .filter((run) => run.testKind && run.status !== "skipped")
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
 
   return (
     <Page
@@ -76,6 +84,38 @@ export function ProgressPage() {
           </div>
         ) : null}
       </div>
+      <section className="panel">
+        <h2>Time trials</h2>
+        <p className="callout">Do not run a maximal test if your knee hurts or you are unusually sore. A result you enter here is saved with the rest of the log.</p>
+        {tests.length === 0 ? <p>No mile or 5K test is logged yet. Log one from the running page, or open a run and set its test type.</p> : null}
+        {tests.length > 0 ? (
+          <ul className="workout-list">
+            {tests.map((run) => {
+              const totals = runTotals(run.segments);
+              const speed = totals.runningMinutes > 0 ? totals.runningMiles / (totals.runningMinutes / 60) : null;
+              return (
+                <li key={run.id} className="workout-row">
+                  <div>
+                    <strong>{run.testKind === "mile" ? "1-mile time trial" : "5K time trial"}</strong>
+                    <p className="meta">
+                      {formatDisplayDate(run.date)} · {formatClock(totals.runningMinutes)} · {formatMiles(totals.runningMiles)} · {formatPace(totals.paceSecondsPerMile)}
+                      {speed == null ? "" : ` · ${speed.toFixed(2)} mph`}
+                      {run.incline == null ? "" : ` · ${run.incline}% incline`}
+                      {run.continuous == null ? "" : run.continuous ? " · continuous" : " · included walking"}
+                      {run.rpe == null ? "" : ` · RPE ${run.rpe}`}
+                    </p>
+                    {run.notes ? <p className="meta">{run.notes}</p> : null}
+                  </div>
+                  <Link className="button" to={`/running?edit=${run.id}`}>
+                    Edit
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </section>
+      <TestGuide />
       <div className="chart-grid">
         <TrendChart
           title="Bench working weight and estimated 1RM"
@@ -149,7 +189,7 @@ export function ProgressPage() {
         />
         <TrendChart
           title="Average pace"
-          note="Total running time divided by total running distance. A higher line is a slower pace."
+          note="Total running time divided by total running distance. A higher point is a faster pace."
           data={keep(running.pace)}
           kind="line"
           unit="pace"

@@ -1,3 +1,4 @@
+import { TESTING_WEEK } from "./strengthProgram.ts";
 import { createId, todayInputDate } from "./workoutLog.ts";
 
 export const segmentTypes = ["warmup", "running", "recovery", "cooldown"] as const;
@@ -22,6 +23,7 @@ export interface RunSegment {
 export type RunStatus = "logged" | "skipped";
 export type PlanSlot = "tuesday" | "friday" | "weekend";
 export type RunDifficulty = "easier" | "planned" | "harder";
+export type TestKind = "mile" | "fivek";
 
 export interface RunWorkout {
   id: string;
@@ -35,6 +37,9 @@ export interface RunWorkout {
   planWeek: number | null;
   planSlot: PlanSlot | null;
   difficulty: RunDifficulty | null;
+  testKind: TestKind | null;
+  incline: number | null;
+  continuous: boolean | null;
 }
 
 export interface RunTemplate {
@@ -55,8 +60,8 @@ export function createSegment(partial?: Partial<Omit<RunSegment, "id">>): RunSeg
   };
 }
 
-export function unplannedRunFields(): Pick<RunWorkout, "rpe" | "status" | "planWeek" | "planSlot" | "difficulty"> {
-  return { rpe: null, status: "logged", planWeek: null, planSlot: null, difficulty: null };
+export function unplannedRunFields(): Pick<RunWorkout, "rpe" | "status" | "planWeek" | "planSlot" | "difficulty" | "testKind" | "incline" | "continuous"> {
+  return { rpe: null, status: "logged", planWeek: null, planSlot: null, difficulty: null, testKind: null, incline: null, continuous: null };
 }
 
 export function durationMinutes(segment: Pick<RunSegment, "minutes" | "seconds">): number {
@@ -103,8 +108,8 @@ export function runTotals(segments: RunSegment[]): RunTotals {
 }
 
 export function formatMiles(miles: number): string {
-  const rounded = Math.round(miles * 10000) / 10000;
-  return `${rounded.toFixed(4).replace(/\.?0+$/, "")} mi`;
+  if (!Number.isFinite(miles)) return "—";
+  return `${miles.toFixed(2)} mi`;
 }
 
 export function formatClock(totalMinutes: number): string {
@@ -199,7 +204,10 @@ export function normalizeRun(value: unknown): RunWorkout | null {
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date(0).toISOString(),
     rpe: typeof value.rpe === "number" && Number.isFinite(value.rpe) ? value.rpe : null,
     status: value.status === "skipped" ? "skipped" : "logged",
-    planWeek: typeof value.planWeek === "number" && value.planWeek >= 1 && value.planWeek <= 16 ? value.planWeek : null,
+    planWeek: typeof value.planWeek === "number" && value.planWeek >= 1 && value.planWeek <= TESTING_WEEK ? value.planWeek : null,
+    testKind: value.testKind === "mile" || value.testKind === "fivek" ? value.testKind : null,
+    incline: typeof value.incline === "number" && Number.isFinite(value.incline) ? value.incline : null,
+    continuous: value.continuous === true ? true : value.continuous === false ? false : null,
     planSlot: value.planSlot === "tuesday" || value.planSlot === "friday" || value.planSlot === "weekend" ? value.planSlot : null,
     difficulty: value.difficulty === "easier" || value.difficulty === "planned" || value.difficulty === "harder" ? value.difficulty : null,
   };

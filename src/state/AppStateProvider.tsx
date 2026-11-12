@@ -10,7 +10,9 @@ import {
   saveAppData,
   STORAGE_KEY,
   type AppData,
+  type FutureSessionPlan,
   type LibraryEdit,
+  type LibraryExercise,
   type ThemePreference,
 } from "../storage/appData.ts";
 
@@ -75,6 +77,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       runningProgramStart: data.runningProgramStart,
       scheduleOverrides: data.scheduleOverrides ?? [],
       libraryEdits: data.libraryEdits ?? [],
+      exerciseLibrary: data.exerciseLibrary ?? [],
+      futureSessions: data.futureSessions ?? [],
       storageError,
       updateSettings(patch: SettingsPatch) {
         commit((current) => ({
@@ -146,6 +150,31 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           ],
         }));
       },
+      saveLibraryExercise(exercise: LibraryExercise) {
+        if (!exercise.id || !exercise.name.trim()) return;
+        commit((current) => ({
+          ...current,
+          exerciseLibrary: [
+            ...(current.exerciseLibrary ?? []).filter((item) => item.id !== exercise.id),
+            { ...exercise, name: exercise.name.trim() },
+          ],
+        }));
+      },
+      deleteLibraryExercise(exerciseId: string) {
+        commit((current) => ({
+          ...current,
+          exerciseLibrary: (current.exerciseLibrary ?? []).filter((item) => item.id !== exerciseId),
+        }));
+      },
+      saveFutureSession(plan: FutureSessionPlan) {
+        commit((current) => ({
+          ...current,
+          futureSessions: [
+            ...(current.futureSessions ?? []).filter((item) => item.sessionKey !== plan.sessionKey),
+            plan,
+          ],
+        }));
+      },
       replaceData(next: AppData) {
         commit(() => normalizeAppData(next));
       },
@@ -168,7 +197,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         }));
       },
     }),
-    [commit, data.settings, data.workouts, data.runs, data.runTemplates, data.runningProgramStart, data.scheduleOverrides, data.libraryEdits, storageError],
+    [commit, data.settings, data.workouts, data.runs, data.runTemplates, data.runningProgramStart, data.scheduleOverrides, data.libraryEdits, data.exerciseLibrary, data.futureSessions, storageError],
   );
 
   return <AppStateContext value={value}>{children}</AppStateContext>;

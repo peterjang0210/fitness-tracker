@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Page } from "../components/layout/Page.tsx";
+import { TrendChart } from "../components/progress/TrendChart.tsx";
 import {
   BENCH_GOAL_LB,
   BENCH_KEY,
@@ -7,43 +8,33 @@ import {
   MILE_GOAL_SECONDS,
   SQUAT_GOAL_LB,
   SQUAT_KEY,
+  averageRunningPace,
+  bestSet,
   bestSquatForGoal,
   fastestPace,
   goalPercent,
+  latestEffort,
   liftSeries,
-  recentRun,
-  recentStrength,
+  longestContinuous,
   runEffortSeries,
+  weeklyRunningMiles,
 } from "../domain/progress.ts";
-import { FIVE_K_MILES, currentProgramWeek, weekPlan } from "../domain/runningProgram.ts";
-import { nextOpenItem } from "../domain/schedule.ts";
-import { formatMiles, formatPace, runTotals } from "../domain/running.ts";
+import { FIVE_K_MILES, PROGRAM_WEEKS, TESTING_WEEK, currentProgramWeek, planRunFor, weekPlan } from "../domain/runningProgram.ts";
+import { matchingWorkout, nextOpenItem, weekItems, type CalendarItem, type ItemStatus } from "../domain/schedule.ts";
+import { formatClock, formatMiles, formatPace, runTotals } from "../domain/running.ts";
+import { isCompletedSet } from "../domain/workoutLog.ts";
 import { convertWeight, formatWeight } from "../domain/strengthProgram.ts";
-import { formatDisplayDate } from "../domain/workoutLog.ts";
+import { formatDisplayDate, sortWorkouts } from "../domain/workoutLog.ts";
 import { useAppState } from "../state/useAppState.ts";
 
-const areas = [
-  {
-    to: "/workouts",
-    title: "Workouts",
-    text: "Log sets, weight, reps, and RPE for the weekly strength sessions.",
-  },
-  {
-    to: "/running",
-    title: "Running",
-    text: "Record treadmill segments and keep walking time out of the running totals.",
-  },
-  {
-    to: "/progress",
-    title: "Progress",
-    text: "Working weights, volume, distance, pace, and speed from the log on this device.",
-  },
-  {
-    to: "/settings",
-    title: "Settings",
-    text: "Appearance and units are saved locally. There is no account.",
-  },
-];
+const statusText: Record<ItemStatus, string> = {
+  done: "Done",
+  missed: "Missed",
+  today: "Today",
+  upcoming: "Upcoming",
+  skipped: "Skipped",
+  open: "Open",
+};
 
 export function DashboardPage() {
   const { workouts, runs, settings, runningProgramStart, scheduleOverrides = [] } = useAppState();
@@ -54,68 +45,57 @@ export function DashboardPage() {
   const efforts = runEffortSeries(runs);
   const mile = fastestPace(efforts.miles);
   const fiveK = fastestPace(efforts.fiveKs);
-  const lastRun = recentRun(runs);
-  const lastTotals = lastRun ? runTotals(lastRun.segments) : null;
+  const recentMile = latestEffort(efforts.miles);
+  const recentFiveK = latestEffort(efforts.fiveKs);
+  const benchBest = bestSet(workouts, BENCH_KEY, unit);
+  const squatBest = bestSet(workouts, SQUAT_KEY, unit);
+  const longest = longestContinuous(runs);
+  const averagePace = averageRunningPace(runs);
+  const weekMiles = weeklyRunningMiles(runs);
   const weekNumber = currentProgramWeek(runningProgramStart);
   const week = weekPlan(weekNumber);
+  const schedule = weekItems(runningProgramStart, weekNumber, scheduleOverrides, workouts, runs);
   const upcoming = nextOpenItem(runningProgramStart, scheduleOverrides, workouts, runs);
-  const recent = latestActivity(workouts, runs);
+  const weeksUntilTest = Math.max(0, TESTING_WEEK - weekNumber);
+  const liftsDone = workouts.filter((workout) => workout.exercises.some((exercise) => exercise.sets.some(isCompletedSet))).length;
+  const runsDone = runs.filter((run) => run.status !== "skipped" && runTotals(run.segments).runningMiles > 0).length;
   const benchGoal = convertWeight(BENCH_GOAL_LB, "lb", unit);
   const squatGoal = convertWeight(SQUAT_GOAL_LB, "lb", unit);
   const fiveKSeconds = fiveK ? fiveK.pace * FIVE_K_MILES : null;
+  const recent = recentActivity(workouts, runs);
 
   const targets = [
     {
       label: "Bench press",
       value: formatWeight(benchGoal, unit),
-      detail: bench ? `${formatWeight(bench.working, unit)} working · ${percent(goalPercent(bench.working, benchGoal))}` : "Not logged yet",
+      detail: bench ? `${formatWeight(bench.working, unit)} working` : "Not logged yet",
+      percent: goalPercent(bench?.working ?? null, benchGoal),
     },
     {
       label: "Squat",
-      value: `${formatWeight(squatGoal, unit)} for 3+ reps`,
-      detail: squatForGoal
-        ? `${formatWeight(squatForGoal, unit)} for 3+ · ${percent(goalPercent(squatForGoal, squatGoal))}`
-        : "Not logged yet",
+      value: `${formatWeight(squatGoal, unit)} × 3`,
+      detail: squatForGoal ? `${formatWeight(squatForGoal, unit)} for 3+` : squat ? `${formatWeight(squat.working, unit)} working` : "Not logged yet",
+      percent: goalPercent(squatForGoal, squatGoal),
     },
     {
       label: "Mile",
       value: "7:00",
-      detail: mile ? `${clock(mile.pace)} pace · ${percent(goalPercent(mile.pace, MILE_GOAL_SECONDS, true))}` : "No mile effort yet",
+      detail: mile ? `${formatPace(mile.pace)} best` : "No mile effort yet",
+      percent: mile ? goalPercent(mile.pace, MILE_GOAL_SECONDS, true) : null,
     },
     {
       label: "5K",
       value: "Sub 25:00",
-      detail: fiveKSeconds
-        ? `${clock(fiveKSeconds)} · ${percent(goalPercent(fiveKSeconds, FIVE_K_GOAL_SECONDS, true))}`
-        : "No 5K effort yet",
+      detail: fiveKSeconds ? `${formatClock(fiveKSeconds / 60)} best` : "No 5K effort yet",
+      percent: fiveKSeconds ? goalPercent(fiveKSeconds, FIVE_K_GOAL_SECONDS, true) : null,
     },
-  ];
-
-  const facts = [
-    { label: "Training week", value: `Week ${weekNumber}`, detail: week.phase },
-    { label: "Next workout", value: upcoming ? upcoming.name : "Program complete", detail: upcoming ? formatDisplayDate(upcoming.date) : "All 16 weeks are scheduled" },
-    { label: "Recent workout", value: recent ? recent.name : "Nothing logged", detail: recent ? formatDisplayDate(recent.date) : "Log a session to see it here" },
-    { label: "Bench working weight", value: bench ? formatWeight(bench.working, unit) : "—", detail: bench ? formatDisplayDate(bench.date) : "No bench sets yet" },
-    { label: "Squat working weight", value: squat ? formatWeight(squat.working, unit) : "—", detail: squat ? formatDisplayDate(squat.date) : "No barbell squat sets yet" },
-    {
-      label: "Recent running distance",
-      value: lastTotals ? formatMiles(lastTotals.runningMiles) : "—",
-      detail: lastRun ? formatDisplayDate(lastRun.date) : "No logged run yet",
-    },
-    {
-      label: "Recent running pace",
-      value: formatPace(lastTotals?.paceSecondsPerMile ?? null),
-      detail: lastTotals ? `${Math.round(lastTotals.runningMinutes)} min running` : "Walking time is excluded",
-    },
-    { label: "Fastest mile", value: mile ? clock(mile.pace) : "—", detail: mile ? formatDisplayDate(mile.date) : "Needs a continuous mile" },
-    { label: "Fastest 5K", value: fiveKSeconds ? clock(fiveKSeconds) : "—", detail: fiveK ? formatDisplayDate(fiveK.date) : "Needs a continuous 5K" },
   ];
 
   return (
     <Page
-      eyebrow="Home"
+      eyebrow={`Week ${weekNumber} of ${PROGRAM_WEEKS}`}
       title="Training board"
-      lede="A local log for the 16-week strength and running block. Nothing here is uploaded."
+      lede={`${week.phase}. ${weeksUntilTest === 0 ? "This is testing week." : `${weeksUntilTest} week${weeksUntilTest === 1 ? "" : "s"} until testing week.`} ${week.note}`}
     >
       <div className="target-grid" aria-label="Training targets">
         {targets.map((target) => (
@@ -123,50 +103,173 @@ export function DashboardPage() {
             <p>{target.label}</p>
             <strong>{target.value}</strong>
             <span>{target.detail}</span>
+            <div className="meter" role="meter" aria-label={`${target.label} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={target.percent ?? 0}>
+              <span style={{ width: `${target.percent ?? 0}%` }} />
+            </div>
+            <span>{target.percent == null ? "0% of the goal" : `${target.percent}% of the goal`}</span>
           </article>
         ))}
       </div>
-      <div className="fact-grid" aria-label="Current training">
-        {facts.map((fact) => (
-          <article key={fact.label} className="target-card">
-            <p>{fact.label}</p>
-            <strong>{fact.value}</strong>
-            <span>{fact.detail}</span>
-          </article>
-        ))}
+      <div className="stat-grid">
+        <article className="panel">
+          <h2>Strength</h2>
+          <p>Bench estimated 1RM {bench ? formatWeight(bench.oneRm, unit) : "is not logged yet"}.</p>
+          <p>Best bench set {benchBest ? `${formatWeight(benchBest.weight, unit)} × ${benchBest.reps}` : "is not logged yet"}.</p>
+          <p>Squat estimated 1RM {squat ? formatWeight(squat.oneRm, unit) : "is not logged yet"}.</p>
+          <p>Best squat set {squatBest ? `${formatWeight(squatBest.weight, unit)} × ${squatBest.reps}` : "is not logged yet"}.</p>
+        </article>
+        <article className="panel">
+          <h2>Running</h2>
+          <p>Latest mile {recentMile ? `${formatPace(recentMile.pace)} on ${recentMile.label}` : "is not logged yet"}.</p>
+          <p>Latest 5K {recentFiveK ? `${formatClock((recentFiveK.pace * recentFiveK.miles) / 60)} on ${recentFiveK.label}` : "is not logged yet"}.</p>
+          <p>This week {formatMiles(weekMiles)}. Longest continuous run {longest ? formatMiles(longest.miles) : "is not logged yet"}.</p>
+          <p>Average pace {formatPace(averagePace)}.</p>
+        </article>
+        <article className="panel">
+          <h2>Program</h2>
+          <p>Week {weekNumber} of {PROGRAM_WEEKS}.</p>
+          <p>{weeksUntilTest === 0 ? "Testing week is this week." : `${weeksUntilTest} week${weeksUntilTest === 1 ? "" : "s"} until testing week.`}</p>
+          <p>{upcoming ? `Next up: ${upcoming.name} on ${formatDisplayDate(upcoming.date)}.` : "Nothing left on the schedule."}</p>
+          <p>{liftsDone} lift{liftsDone === 1 ? "" : "s"} and {runsDone} run{runsDone === 1 ? "" : "s"} logged.</p>
+        </article>
       </div>
-      <div className="area-grid">
-        {areas.map((area) => (
-          <Link key={area.to} to={area.to} className="area-card">
-            <h2>{area.title}</h2>
-            <p>{area.text}</p>
-          </Link>
-        ))}
+      <div className="dash-layout">
+        <section className="panel">
+          <h2>This week</h2>
+          <p className="meta">{schedule.filter((item) => item.status === "done").length} logged · {schedule.filter((item) => item.status === "missed").length} missed</p>
+          <ul className="schedule-list">
+            {schedule.map((item) => (
+              <li key={`${item.kind}-${item.key}`}>
+                <Link className={`schedule-row is-${item.status}`} to={itemHref(item, runningProgramStart, workouts, runs)}>
+                  <span className={`status-pill is-${item.status}`}>{statusText[item.status]}</span>
+                  <span className="schedule-copy">
+                    <strong>{item.name}</strong>
+                    <span>{formatDisplayDate(item.date)}{item.optional ? " · optional" : ""}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="panel">
+          <h2>Recent log</h2>
+          {recent.length === 0 ? (
+            <p>Nothing logged yet. Open the program and start today’s session.</p>
+          ) : (
+            <ul className="schedule-list">
+              {recent.map((item) => (
+                <li key={item.href}>
+                  <Link className="schedule-row is-done" to={item.href}>
+                    <span className="status-pill is-done">{item.kind}</span>
+                    <span className="schedule-copy">
+                      <strong>{item.name}</strong>
+                      <span>
+                        {formatDisplayDate(item.date)} · {item.detail}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+      <div className="chart-grid">
+        <TrendChart
+          title="Bench history"
+          note="Estimated 1RM from logged bench sets."
+          data={liftSeries(workouts, BENCH_KEY, unit)}
+          kind="line"
+          unit={unit}
+          empty="No bench sets logged yet."
+          goal={{ value: benchGoal, name: "225" }}
+          series={[
+            { key: "working", name: "Working weight", color: "var(--accent)" },
+            { key: "oneRm", name: "Estimated 1RM", color: "var(--good)" },
+          ]}
+        />
+        <TrendChart
+          title="Squat history"
+          note="Estimated 1RM from logged barbell squat sets."
+          data={liftSeries(workouts, SQUAT_KEY, unit)}
+          kind="line"
+          unit={unit}
+          empty="No squat sets logged yet."
+          goal={{ value: squatGoal, name: "315" }}
+          series={[
+            { key: "working", name: "Working weight", color: "var(--accent)" },
+            { key: "oneRm", name: "Estimated 1RM", color: "var(--good)" },
+          ]}
+        />
+        <TrendChart
+          title="Weekly running distance"
+          note="Running segments only."
+          data={efforts.weekly}
+          kind="bar"
+          unit="mi"
+          empty="No running miles logged yet."
+          series={[{ key: "miles", name: "Miles", color: "var(--good)" }]}
+        />
+        <TrendChart
+          title="Mile efforts"
+          note="Continuous running of at least 1 mile. The line is 7:00."
+          data={efforts.miles}
+          kind="line"
+          unit="pace"
+          empty="No continuous mile logged yet."
+          goal={{ value: MILE_GOAL_SECONDS, name: "7:00" }}
+          series={[{ key: "pace", name: "Pace", color: "var(--accent)" }]}
+        />
       </div>
     </Page>
   );
 }
 
-function latestActivity(
-  workouts: Parameters<typeof recentStrength>[0],
-  runs: Parameters<typeof recentRun>[0],
-): { date: string; name: string } | null {
-  const workout = recentStrength(workouts);
-  const run = recentRun(runs);
-  if (!workout && !run) return null;
-  if (!workout) return { date: run!.date, name: run!.name };
-  if (!run) return { date: workout.date, name: workout.name };
-  const runIsNewer = run.date > workout.date || (run.date === workout.date && run.updatedAt > workout.updatedAt);
-  return runIsNewer ? { date: run.date, name: run.name } : { date: workout.date, name: workout.name };
+function itemHref(
+  item: CalendarItem,
+  start: string,
+  workouts: Parameters<typeof matchingWorkout>[0],
+  runs: Parameters<typeof planRunFor>[0],
+): string {
+  if (item.kind === "note") return "/calendar";
+  if (item.kind === "strength") {
+    const logged = matchingWorkout(workouts, start, item.week, item.key, item.date);
+    return logged ? `/workouts?edit=${logged.id}` : `/workouts?start=${item.key}&date=${item.date}&week=${item.week}`;
+  }
+  if (item.key === "tuesday" || item.key === "friday" || item.key === "weekend") {
+    const run = planRunFor(runs, item.week, item.key);
+    if (run) return `/running?edit=${run.id}`;
+  }
+  return `/running?slot=${item.key}&week=${item.week}&date=${item.date}`;
 }
 
-function percent(value: number | null): string {
-  return value == null ? "0%" : `${value}% of the goal`;
-}
-
-function clock(seconds: number): string {
-  const rounded = Math.round(seconds);
-  const minutes = Math.floor(rounded / 60);
-  const rest = rounded % 60;
-  return `${minutes}:${rest.toString().padStart(2, "0")}`;
+function recentActivity(
+  workouts: Parameters<typeof sortWorkouts>[0],
+  runs: Parameters<typeof planRunFor>[0],
+): { href: string; date: string; name: string; detail: string; kind: string; updatedAt: string }[] {
+  const strength = sortWorkouts(workouts).map((workout) => {
+    const done = workout.exercises.filter((exercise) => exercise.status === "completed").length;
+    return {
+      href: `/workouts?edit=${workout.id}`,
+      date: workout.date,
+      updatedAt: workout.updatedAt,
+      name: workout.name,
+      detail: `${done} exercise${done === 1 ? "" : "s"} done`,
+      kind: "Lift",
+    };
+  });
+  const running = runs.map((run) => {
+    const totals = runTotals(run.segments);
+    return {
+      href: `/running?edit=${run.id}`,
+      date: run.date,
+      updatedAt: run.updatedAt,
+      name: run.name,
+      detail: run.status === "skipped" ? "Skipped" : `${formatMiles(totals.runningMiles)} · ${formatPace(totals.paceSecondsPerMile)}`,
+      kind: "Run",
+    };
+  });
+  return [...strength, ...running]
+    .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 5);
 }

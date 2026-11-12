@@ -27,7 +27,8 @@ function Navigation({ className, label }: { className: string; label: string }) 
           className={({ isActive }) => (isActive ? "nav-link is-active" : "nav-link")}
         >
           <NavIcon name={item.icon} />
-          <span>{item.label}</span>
+          <span className="nav-label">{item.label}</span>
+          <span className="nav-short">{item.short}</span>
         </NavLink>
       ))}
     </nav>
