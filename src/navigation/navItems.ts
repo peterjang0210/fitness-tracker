@@ -8,11 +8,16 @@ export interface NavItem {
   end?: boolean;
 }
 
+/** Primary destinations shown in mobile bottom nav and desktop sidebar. */
 export const navItems: NavItem[] = [
-  { to: "/", label: "Dashboard", short: "Home", icon: "dashboard", end: true },
+  { to: "/", label: "Home", short: "Home", icon: "dashboard", end: true },
+  { to: "/workouts", label: "Workout", short: "Workout", icon: "workouts" },
+  { to: "/progress", label: "Progress", short: "Progress", icon: "progress" },
+  { to: "/settings", label: "Settings", short: "Settings", icon: "settings" },
+];
+
+/** Secondary destinations linked from Home / Workout / Settings. */
+export const secondaryNavItems: NavItem[] = [
   { to: "/calendar", label: "Program", short: "Plan", icon: "calendar" },
-  { to: "/workouts", label: "Workout Log", short: "Lifts", icon: "workouts" },
-  { to: "/running", label: "Running Log", short: "Runs", icon: "running" },
-  { to: "/progress", label: "Progress", short: "Charts", icon: "progress" },
-  { to: "/settings", label: "Settings", short: "More", icon: "settings" },
+  { to: "/running", label: "Running", short: "Runs", icon: "running" },
 ];

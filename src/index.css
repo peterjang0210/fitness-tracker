@@ -43,9 +43,14 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top left, rgba(184, 67, 31, 0.08), transparent 28rem),
     var(--bg);
@@ -188,7 +193,25 @@ code {
 
 .page-header {
   max-width: 38rem;
-  margin-bottom: 1.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.secondary-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sidebar-secondary {
+  margin-top: 0.35rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 247, 242, 0.12);
+}
+
+.sidebar-secondary .nav-link {
+  min-height: 2.35rem;
+  font-size: 0.92rem;
+  opacity: 0.9;
 }
 
 .eyebrow {
@@ -372,8 +395,8 @@ h1 {
 }
 
 .button {
-  min-height: 2.5rem;
-  padding: 0.35rem 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 0.7rem;
   background: var(--bg);
@@ -493,14 +516,101 @@ a.button {
   justify-content: space-between;
 }
 
+.workout-row-copy {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
 .exercise-card {
   display: grid;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: 0.65rem;
+  padding: 0.85rem;
   border: 1px solid var(--line);
-  border-radius: 1rem;
+  border-radius: 0.85rem;
   background: var(--bg-raised);
   box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.exercise-card.is-collapsed {
+  gap: 0.35rem;
+  padding: 0.7rem 0.85rem;
+}
+
+.exercise-title-block {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.exercise-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.exercise-summary {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.summary-label {
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.exercise-details,
+.set-note-details {
+  min-width: 0;
+}
+
+.exercise-details summary,
+.set-note-details summary,
+.tip-list summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.tip-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tip-list details {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--bg);
+}
+
+.tip-list summary {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.focus-panel .focus-links {
+  margin-top: 0.75rem;
+}
+
+.next-up {
+  margin-top: 0.65rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.next-up a {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .exercise-card.is-superset {
@@ -540,37 +650,57 @@ a.button {
 
 .set-table {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 .set-head,
 .set-row {
   display: grid;
-  grid-template-columns: 1.4rem minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(0, 0.7fr) 2rem;
-  gap: 0.4rem;
+  grid-template-columns: 1.35rem minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.65fr) 2rem;
+  gap: 0.35rem;
   align-items: center;
+  min-width: 0;
 }
 
 .set-head {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .set-index {
   color: var(--muted);
   font-weight: 700;
+  text-align: center;
 }
 
 .set-block {
   display: grid;
   gap: 0.3rem;
+  min-width: 0;
 }
 
 .set-block.is-skipped {
   opacity: 0.72;
+}
+
+.set-field {
+  min-width: 0;
+}
+
+.set-field-reps input {
+  font-weight: 700;
+}
+
+.set-field-rpe {
+  max-width: 4.25rem;
+}
+
+.set-remove {
+  justify-self: end;
 }
 
 .set-extra {
@@ -578,13 +708,15 @@ a.button {
   flex-wrap: wrap;
   gap: 0.35rem;
   align-items: center;
-  padding-left: 1.8rem;
+  padding-left: 1.7rem;
+  min-width: 0;
 }
 
 .set-note {
-  flex: 1 1 8rem;
+  width: 100%;
   min-width: 0;
-  padding: 0.4rem 0.55rem;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: 0.65rem;
   background: var(--bg);
@@ -593,7 +725,7 @@ a.button {
 
 .set-save {
   color: var(--good);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
 }
 
@@ -637,6 +769,7 @@ a.button {
   background: color-mix(in srgb, var(--bg-raised) 94%, transparent);
   box-shadow: var(--shadow);
   backdrop-filter: blur(8px);
+  min-width: 0;
 }
 
 .save-note {
@@ -811,10 +944,11 @@ a.button {
   display: grid;
   gap: 0.25rem;
   min-width: 0;
+  max-width: 100%;
 }
 
 .field.grow {
-  flex: 1 1 16rem;
+  flex: 1 1 12rem;
 }
 
 .field span,
@@ -824,21 +958,36 @@ a.button {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select,
+.set-note,
+.range-dates input {
   width: 100%;
-  padding: 0.5rem 0.6rem;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: 0.65rem;
   background: var(--bg);
   color: var(--ink);
 }
 
+.field textarea {
+  min-height: 4.5rem;
+}
+
+.editor-bar {
+  min-width: 0;
+}
+
 .editor-bar .field {
-  flex: 0 0 11rem;
+  flex: 1 1 8rem;
+  max-width: 100%;
 }
 
 .editor-bar .field.grow {
-  flex: 1 1 16rem;
+  flex: 1 1 12rem;
 }
 
 .totals {
@@ -854,6 +1003,8 @@ a.button {
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: var(--bg-raised);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .segment-card.is-walking {
@@ -862,9 +1013,10 @@ a.button {
 
 .segment-grid {
   display: grid;
-  grid-template-columns: minmax(9rem, 1.3fr) repeat(3, minmax(5rem, 0.7fr)) minmax(8rem, 0.9fr);
+  grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(0, 0.7fr)) minmax(0, 0.9fr);
   gap: 0.5rem;
   align-items: end;
+  min-width: 0;
 }
 
 .segment-distance {
@@ -879,18 +1031,15 @@ a.button {
 }
 
 .field select {
-  width: 100%;
-  min-height: 2.45rem;
-  padding: 0.45rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 0.65rem;
-  background: var(--bg);
-  color: var(--ink);
   font: inherit;
 }
 
 @media (max-width: 900px) {
   .target-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .totals {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -907,11 +1056,32 @@ a.button {
   .topbar {
     display: flex;
     align-items: center;
-    padding: 0.9rem 1rem 0;
+    padding: 0.75rem 1rem 0;
   }
 
   .content {
-    padding: 1.25rem 1rem calc(8.75rem + env(safe-area-inset-bottom));
+    padding: 1rem 1rem calc(6.75rem + env(safe-area-inset-bottom));
+  }
+
+  .page-header {
+    margin-bottom: 1rem;
+  }
+
+  h1 {
+    font-size: 1.65rem;
+  }
+
+  .lede {
+    font-size: 0.92rem;
+  }
+
+  .panel,
+  .target-card,
+  .session-card,
+  .exercise-card {
+    padding: 0.8rem;
+    border-radius: 0.8rem;
+    box-shadow: none;
   }
 
   input,
@@ -931,7 +1101,7 @@ a.button {
   }
 
   .editor-actions {
-    bottom: calc(5.4rem + env(safe-area-inset-bottom));
+    bottom: calc(4.85rem + env(safe-area-inset-bottom));
   }
 
   .stat-grid,
@@ -944,29 +1114,62 @@ a.button {
     margin-left: 0;
   }
 
+  .set-head,
+  .set-row {
+    grid-template-columns: 1.2rem minmax(0, 1.25fr) minmax(0, 1.05fr) minmax(0, 0.7fr) 1.75rem;
+    gap: 0.3rem;
+  }
+
+  .set-field-rpe {
+    max-width: none;
+  }
+
+  .set-extra {
+    padding-left: 0;
+  }
+
+  .status-row {
+    width: 100%;
+  }
+
+  .status-row .button {
+    flex: 1 1 auto;
+    min-height: 2.5rem;
+  }
+
+  .workout-row {
+    align-items: flex-start;
+  }
+
+  .segment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tabbar {
     position: fixed;
-    right: 0.6rem;
-    bottom: 0.6rem;
-    left: 0.6rem;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 0.15rem;
-    padding: 0.35rem;
-    border: 1px solid var(--line);
-    border-radius: 1rem;
-    background: color-mix(in srgb, var(--bg-raised) 92%, transparent);
-    box-shadow: var(--shadow);
-    backdrop-filter: blur(10px);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    padding: 0.35rem 0.4rem calc(0.35rem + env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--bg-raised) 96%, transparent);
+    box-shadow: 0 -8px 24px rgba(36, 28, 22, 0.08);
+    backdrop-filter: blur(12px);
   }
 
   .tabbar .nav-link {
     flex-direction: column;
     justify-content: center;
     gap: 0.15rem;
-    min-height: 3.4rem;
-    padding: 0.3rem 0.15rem;
-    font-size: 0.72rem;
+    min-height: 3.25rem;
+    padding: 0.25rem 0.2rem;
+    font-size: 0.7rem;
     text-align: center;
   }
 
@@ -979,20 +1182,30 @@ a.button {
   }
 
   .tabbar .nav-link.is-active {
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
   }
 }
 
-@media (max-width: 900px) {
-  .totals {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 430px) {
+  .status-pill {
+    min-width: 3.4rem;
+    font-size: 0.62rem;
+  }
+
+  .content {
+    padding-inline: 0.85rem;
   }
 }
 
-@media (max-width: 760px) {
-  .segment-grid {
-    grid-template-columns: 1fr 1fr;
+@media (max-width: 360px) {
+  .set-head,
+  .set-row {
+    grid-template-columns: 1.1rem minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.72fr) 1.5rem;
+  }
+
+  .button {
+    padding-inline: 0.55rem;
   }
 }
 
@@ -1135,13 +1348,6 @@ a.button {
   gap: 0.45rem;
 }
 
-.range-dates input {
-  padding: 0.5rem 0.6rem;
-  border: 1px solid var(--line);
-  border-radius: 0.65rem;
-  background: var(--bg);
-  color: var(--ink);
-}
 
 .range-dates label {
   display: grid;

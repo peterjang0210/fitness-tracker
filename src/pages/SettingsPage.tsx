@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ChoiceGroup } from "../components/ChoiceGroup.tsx";
 import { Page } from "../components/layout/Page.tsx";
 import { sessionTemplates } from "../domain/strengthProgram.ts";
@@ -79,12 +80,16 @@ export function SettingsPage() {
   }
 
   return (
-    <Page
-      eyebrow="Preferences"
-      title="Settings"
-      lede="Theme, units, the program start, and a copy of the log stay on this device. Export a file before you clear anything."
-    >
+    <Page eyebrow="Preferences" title="Settings" lede="Theme, units, program start, and backups stay on this device.">
       <div className="settings-stack">
+        <div className="secondary-links" aria-label="Related">
+          <Link className="button" to="/calendar">
+            Program schedule
+          </Link>
+          <Link className="button" to="/running">
+            Running log
+          </Link>
+        </div>
         <ChoiceGroup
           name="theme"
           legend="Appearance"

@@ -53,11 +53,7 @@ export function CalendarPage() {
   }
 
   return (
-    <Page
-      eyebrow="Schedule"
-      title="Program"
-      lede="Tuesday bench and a short easy run, Wednesday squat, Thursday speed work, Friday paused bench with a lighter squat, and a longer easy run on Saturday. Week 17 is the testing week. Move any session by changing its date."
-    >
+    <Page eyebrow="Schedule" title="Program" lede="Weekly lift and run schedule. Change a date to move a session.">
       <div className="editor-bar">
         <div className="inline-actions">
           <button type="button" className="button" disabled={week === 1} onClick={() => setWeek((value) => value - 1)}>

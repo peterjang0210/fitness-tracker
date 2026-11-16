@@ -196,6 +196,7 @@ export function RunEditor({
                 <span>Minutes</span>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min="0"
                   step="1"
                   value={numberValue(segment.minutes)}
@@ -206,6 +207,7 @@ export function RunEditor({
                 <span>Seconds</span>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min="0"
                   step="1"
                   value={numberValue(segment.seconds)}
@@ -213,9 +215,10 @@ export function RunEditor({
                 />
               </label>
               <label className="field">
-                <span>Speed (mph)</span>
+                <span>Speed</span>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.1"
                   value={numberValue(segment.speedMph)}

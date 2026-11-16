@@ -80,11 +80,8 @@ export function WorkoutEditor({
             onBlur={onFlush}
           />
         </label>
-        <p className="meta unit-note">Weights are stored in {workout.unit}. This edit stays on this workout until you apply it to future sessions.</p>
       </div>
-      {programSession && usesFutureList ? (
-        <p className="meta">New sessions of this day start from your saved exercise list. The original program is still available.</p>
-      ) : null}
+      <p className="meta unit-note">Weights in {workout.unit}.{programSession && usesFutureList ? " Future sessions of this day use your saved list." : ""}</p>
 
       {workout.exercises.map((exercise, index) => (
         <ExerciseCard

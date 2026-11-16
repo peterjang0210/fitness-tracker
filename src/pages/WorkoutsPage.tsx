@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Page } from "../components/layout/Page.tsx";
 import { WorkoutEditor } from "../components/workouts/WorkoutEditor.tsx";
 import { isProgramSessionKey, sessionTemplates, TESTING_WEEK } from "../domain/strengthProgram.ts";
@@ -165,11 +165,7 @@ export function WorkoutsPage() {
   }
 
   return (
-    <Page
-      eyebrow="Strength"
-      title="Workout log"
-      lede="Enter reps and the set is saved on this device. A set counts as completed only after the reps are filled in."
-    >
+    <Page eyebrow="Strength" title="Workout" lede="Enter reps to save a set. Completed exercises collapse to keep the log short.">
       {draft ? (
         <WorkoutEditor
           workout={draft}
@@ -205,6 +201,14 @@ export function WorkoutsPage() {
         />
       ) : (
         <div className="workout-home">
+          <div className="secondary-links" aria-label="Related">
+            <Link className="button" to="/running">
+              Running log
+            </Link>
+            <Link className="button" to="/calendar">
+              Program schedule
+            </Link>
+          </div>
           <div className="session-grid">
             {sessionTemplates.map((session) => (
               <button
@@ -218,7 +222,7 @@ export function WorkoutsPage() {
                 <span className="eyebrow">{session.day}</span>
                 <strong>{session.name}</strong>
                 <span>{session.summary}</span>
-                {futureSessions.some((plan) => plan.sessionKey === session.key) ? <span>Uses your saved exercise list</span> : null}
+                {futureSessions.some((plan) => plan.sessionKey === session.key) ? <span>Uses your saved list</span> : null}
               </button>
             ))}
             <button
@@ -230,14 +234,14 @@ export function WorkoutsPage() {
             >
               <span className="eyebrow">Any day</span>
               <strong>Custom workout</strong>
-              <span>Start from an empty session and add exercises from the library.</span>
+              <span>Empty session — add exercises as you go.</span>
             </button>
           </div>
 
           <section className="panel">
             <h2>Saved workouts</h2>
             {listed.length === 0 ? (
-              <p>No workouts yet. Start one of the three sessions above. It stays in this browser after you save.</p>
+              <p className="meta">No workouts yet. Start a session above.</p>
             ) : (
               <ul className="workout-list">
                 {listed.map((workout) => {
@@ -245,10 +249,10 @@ export function WorkoutsPage() {
                   const skipped = workout.exercises.filter((exercise) => exercise.status === "skipped").length;
                   return (
                     <li key={workout.id} className="workout-row">
-                      <div>
+                      <div className="workout-row-copy">
                         <strong>{workout.name}</strong>
                         <p className="meta">
-                          {formatDisplayDate(workout.date)} · {workout.unit} · {completed} completed · {skipped} skipped
+                          {formatDisplayDate(workout.date)} · {completed} done · {skipped} skipped
                         </p>
                       </div>
                       <div className="inline-actions">
@@ -264,14 +268,14 @@ export function WorkoutsPage() {
                         {pendingDelete === workout.id ? (
                           <>
                             <button type="button" className="button danger" onClick={() => removeWorkout(workout.id)}>
-                              Confirm delete
+                              Confirm
                             </button>
                             <button type="button" className="button" onClick={() => setPendingDelete(null)}>
                               Cancel
                             </button>
                           </>
                         ) : (
-                          <button type="button" className="button" onClick={() => setPendingDelete(workout.id)}>
+                          <button type="button" className="button quiet" onClick={() => setPendingDelete(workout.id)}>
                             Delete
                           </button>
                         )}

@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { navItems } from "../../navigation/navItems.ts";
+import { navItems, secondaryNavItems } from "../../navigation/navItems.ts";
 import { NavIcon } from "../NavIcon.tsx";
 
 function Brand() {
@@ -16,10 +16,18 @@ function Brand() {
   );
 }
 
-function Navigation({ className, label }: { className: string; label: string }) {
+function Navigation({
+  className,
+  label,
+  items,
+}: {
+  className: string;
+  label: string;
+  items: typeof navItems;
+}) {
   return (
     <nav className={className} aria-label={label}>
-      {navItems.map((item) => (
+      {items.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
@@ -40,7 +48,8 @@ export function AppShell() {
     <div className="shell">
       <aside className="sidebar">
         <Brand />
-        <Navigation className="sidebar-nav" label="Primary" />
+        <Navigation className="sidebar-nav" label="Primary" items={navItems} />
+        <Navigation className="sidebar-nav sidebar-secondary" label="More" items={secondaryNavItems} />
         <p className="sidebar-note">Your log stays in this browser.</p>
       </aside>
       <div className="workspace">
@@ -50,7 +59,7 @@ export function AppShell() {
         <main className="content">
           <Outlet />
         </main>
-        <Navigation className="tabbar" label="Primary mobile" />
+        <Navigation className="tabbar" label="Primary mobile" items={navItems} />
       </div>
     </div>
   );

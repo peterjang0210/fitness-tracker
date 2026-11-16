@@ -53,11 +53,7 @@ export function ProgressPage() {
     .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
 
   return (
-    <Page
-      eyebrow="Charts"
-      title="Progress"
-      lede="These charts read the workouts and runs saved in this browser. Change a log and the lines move with it."
-    >
+    <Page eyebrow="Charts" title="Progress" lede="Strength and running trends from this browser’s log.">
       <div className="range-bar">
         <div className="button-row" role="group" aria-label="Date range">
           {presets.map((item) => (

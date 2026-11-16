@@ -8,7 +8,7 @@ export function Page({
 }: {
   eyebrow: string;
   title: string;
-  lede: string;
+  lede?: string;
   children?: ReactNode;
 }) {
   return (
@@ -16,7 +16,7 @@ export function Page({
       <header className="page-header">
         <p className="eyebrow">{eyebrow}</p>
         <h1>{title}</h1>
-        <p className="lede">{lede}</p>
+        {lede ? <p className="lede">{lede}</p> : null}
       </header>
       {children}
     </section>

@@ -86,11 +86,7 @@ export function RunningPage() {
   }
 
   return (
-    <Page
-      eyebrow="Treadmill"
-      title="Running log"
-      lede="Distance is minutes × mph ÷ 60. Warm-up, walking recovery, and cooldown stay out of the running distance and pace."
-    >
+    <Page eyebrow="Treadmill" title="Running" lede="Distance = minutes × mph ÷ 60. Walking segments stay out of pace.">
       {draft ? (
         <RunEditor
           run={draft}
