@@ -9,6 +9,7 @@ import {
   type SessionKey,
 } from "./strengthProgram.ts";
 import type { FutureSessionPlan, LibraryEdit, LibraryExercise, WeightUnit } from "../storage/appData.ts";
+import { nextLoad, type LiftKind, type LiftPerformance } from "./progression.ts";
 
 export type ExerciseStatus = "pending" | "completed" | "skipped";
 
@@ -397,6 +398,17 @@ export function suggestedWeight(
     };
   }
 
+  if (exerciseKey === "paused-bench") {
+    const bench = previousExercise(history, current, "flat-bench");
+    const benchWeight = bench ? lastWorkingWeight(bench.exercise) : null;
+    if (bench && benchWeight != null) {
+      const weight = Math.round(convertWeight(benchWeight, bench.workout.unit, current.unit) * 0.8 * 2) / 2;
+      return {
+        weight,
+        note: `Paused bench starts near 80% of the last bench session, ${formatWeight(weight, current.unit)}. It progresses on its own after you log it.`,
+      };
+    }
+  }
   const template =
     current.planWeek === TESTING_WEEK
       ? sessionTemplate("wednesday-squat", TESTING_WEEK).exercises.find((item) => item.exerciseKey === exerciseKey) ?? exerciseTemplate(exerciseKey)
@@ -417,69 +429,62 @@ export function suggestedWeight(
   };
 }
 
-const liftTargets: Record<string, { sets: number; reps: number }> = {
-  "flat-bench": { sets: 3, reps: 5 },
-  "barbell-squat": { sets: 3, reps: 5 },
-  "light-squat": { sets: 3, reps: 5 },
-};
+function liftKind(exerciseKey: string): LiftKind | null {
+  if (exerciseKey === "flat-bench" || exerciseKey === "paused-bench") return "bench";
+  if (exerciseKey === "barbell-squat") return "squat";
+  if (exerciseKey === "light-squat") return "light";
+  return null;
+}
 
 function liftProgression(
   exerciseKey: string,
   current: Pick<WorkoutLog, "id" | "date" | "unit">,
   history: WorkoutLog[],
 ): WeightSuggestion | null {
-  const target = liftTargets[exerciseKey];
-  if (!target) return null;
-  const previous = previousExercise(history, current, exerciseKey);
-  if (!previous) return null;
-  const working = lastWorkingWeight(previous.exercise);
-  if (working == null) {
-    return { weight: null, note: "The last session has no weight to suggest. Enter the load you want." };
-  }
-  const sets = previous.exercise.sets.filter((set) => isCompletedSet(set) && set.weight === working);
-  const repsMet = sets.length >= target.sets && sets.every((set) => (set.reps ?? 0) >= target.reps);
-  const rpes = sets.flatMap((set) => (set.rpe == null ? [] : [set.rpe]));
-  const maxRpe = rpes.length === 0 ? null : Math.max(...rpes);
-  const sore = /sore|soreness|pain/i.test(`${previous.exercise.notes} ${previous.workout.notes}`);
-  let bumpLb = 0;
-  if (repsMet && !sore && (maxRpe == null || maxRpe < 8)) {
-    if (exerciseKey === "barbell-squat" && maxRpe != null && maxRpe <= 7) bumpLb = 10;
-    else bumpLb = 5;
-  }
-  const held = convertWeight(working, previous.workout.unit, current.unit);
-  const bump = bumpLb === 0 ? 0 : convertWeight(bumpLb, "lb", current.unit);
-  const weight = Math.round((held + bump) * 2) / 2;
-  return { weight, note: progressionNote(exerciseKey, weight, current.unit, bumpLb, repsMet, maxRpe, sore) };
+  const kind = liftKind(exerciseKey);
+  if (!kind) return null;
+  const sessions = recentPerformances(history, current, exerciseKey);
+  const recommendation = nextLoad(kind, sessions);
+  if (!recommendation) return null;
+  const separate = exerciseKey === "paused-bench" ? " Paused bench stays separate from Tuesday." : exerciseKey === "light-squat" ? " Light squat stays separate from Wednesday." : "";
+  return {
+    weight: convertWeight(recommendation.weightLb, "lb", current.unit),
+    note: `${recommendation.reason}${separate} Apply it to this draft or type another weight. Saved sessions stay as logged.`,
+  };
 }
 
-function progressionNote(
+function recentPerformances(
+  history: WorkoutLog[],
+  current: Pick<WorkoutLog, "id" | "date">,
   exerciseKey: string,
-  weight: number,
-  unit: WeightUnit,
-  bumpLb: number,
-  repsMet: boolean,
-  maxRpe: number | null,
-  sore: boolean,
-): string {
-  const shown = formatWeight(weight, unit);
-  const lift = exerciseKey === "light-squat" ? "Light squat" : exerciseKey === "barbell-squat" ? "Squat" : "Bench";
-  const separate = exerciseKey === "light-squat" ? " It stays separate from the Wednesday squat." : "";
-  if (sore) {
-    return `${lift} notes mention soreness or pain, so the recommendation holds at ${shown}.${separate} Apply it to this draft, or type another weight. Saved sessions are left as logged.`;
+): LiftPerformance[] {
+  const performances: LiftPerformance[] = [];
+  for (const workout of earlierWorkouts(history, current)) {
+    const exercise = workout.exercises.find((item) => item.exerciseKey === exerciseKey && item.status !== "skipped" && item.sets.some(isCompletedSet));
+    if (!exercise) continue;
+    const working = lastWorkingWeight(exercise);
+    if (working == null) continue;
+    const sets = exercise.sets.filter((set) => isCompletedSet(set) && set.weight === working);
+    const minimum = minimumReps(exercise.repTarget);
+    const repsMet = sets.length >= exercise.sets.length && sets.every((set) => (set.reps ?? 0) >= minimum);
+    const finalSet = sets.at(-1);
+    const maxRpe = finalSet?.rpe ?? null;
+    const notes = `${exercise.notes} ${workout.notes}`;
+    const failed = !repsMet || (maxRpe != null && maxRpe > 8) || /sore|pain|technique|missed|failed/i.test(notes);
+    performances.push({
+      weightLb: convertWeight(working, workout.unit, "lb"),
+      repsMet,
+      maxRpe,
+      failed,
+    });
+    if (performances.length === 2) break;
   }
-  if (!repsMet) {
-    return `${lift} did not complete every working set at the target reps, so the recommendation holds at ${shown}.${separate} Apply it here or change it. Saved sessions are left as logged.`;
-  }
-  if (maxRpe != null && maxRpe >= 8) {
-    return `${lift} reached RPE ${maxRpe}, so the recommendation holds at ${shown} instead of adding weight.${separate} Apply it here or change it. Saved sessions are left as logged.`;
-  }
-  if (bumpLb === 10) {
-    return `Squat reps were complete and RPE was ${maxRpe} or below, so the recommendation adds 10 lb, to ${shown}. Apply it to this draft or type a different load. Saved sessions are left as logged.`;
-  }
-  if (maxRpe == null) {
-    return `${lift} reps were complete and RPE was blank, so the recommendation adds 5 lb, to ${shown}.${separate} Apply it here or change it. Saved sessions are left as logged.`;
-  }
-  return `${lift} reps were complete at RPE ${maxRpe}, so the recommendation adds 5 lb, to ${shown}.${separate} Apply it here or change it. Saved sessions are left as logged.`;
+  return performances;
+}
+
+function minimumReps(repTarget: string): number {
+  const match = repTarget.match(/\d+/);
+  return match ? Number(match[0]) : 1;
 }
 
 function startingSuggestion(exerciseKey: string, weight: number, unit: WeightUnit): string {
@@ -488,7 +493,7 @@ function startingSuggestion(exerciseKey: string, weight: number, unit: WeightUni
     return `Suggested next work is ${shown} for 3×5, after 155 lb at RPE 6–7.`;
   }
   if (exerciseKey === "barbell-squat") {
-    return `Suggested start is ${shown}, the low end of the 135–155 lb range. Adjust after warm-ups.`;
+    return `Suggested start is ${shown} for 3×5, from the 145 lb reference. Adjust after warm-ups.`;
   }
   if (exerciseKey === "squat-backoff") {
     return `Optional lighter work at ${shown}. Add a second set if recovery feels fine.`;

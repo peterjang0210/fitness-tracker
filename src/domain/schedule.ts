@@ -75,7 +75,7 @@ export function weekItems(
       date,
       optional: Boolean(session.optional),
       status: runStatus(runs, week, session.slot, date, today, Boolean(session.optional), Boolean(session.postponable)),
-      order: session.slot === "tuesday" ? 1 : session.slot === "friday" ? 4 : 5,
+      order: session.slot === "tuesday" ? 1 : session.slot === "thursday" ? 3 : session.slot === "friday" ? 4 : 5,
     });
   }
   if (plan.testing) {
@@ -117,9 +117,9 @@ export function missedRequiredRuns(
   const from = addDays(beforeDate, -14);
   let count = 0;
   for (let week = 1; week <= PROGRAM_WEEKS; week += 1) {
-    for (const slot of ["tuesday", "friday"] as const) {
-      const session = weekPlan(week).sessions.find((item) => item.slot === slot);
-      if (session?.postponable) continue;
+    for (const session of weekPlan(week).sessions) {
+      if (session.optional || session.postponable) continue;
+      const slot = session.slot;
       const date = scheduledDate(overrides, week, "run", slot, sessionDate(start, week, slot));
       if (date >= beforeDate || date < from || date >= today) continue;
       if (!planRunFor(runs, week, slot)) count += 1;

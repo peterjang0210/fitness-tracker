@@ -6,7 +6,9 @@ import {
   formatMiles,
   formatPace,
   runTotals,
+  type EasyFormat,
   type PlanSlot,
+  type QualityFocus,
   type RunDifficulty,
   type RunSegment,
   type RunWorkout,
@@ -40,6 +42,9 @@ export interface PlanSession {
   quality: boolean;
   summary: string;
   blocks: PlanBlock[];
+  choice?: "easy" | "quality";
+  easyFormat?: EasyFormat;
+  qualityFocus?: QualityFocus;
   testKind?: TestKind;
   postponable?: boolean;
   fixed?: boolean;
@@ -65,389 +70,193 @@ export function repClock(meters: number, mph: number): { minutes: number; second
   return { minutes, seconds, text: `${minutes}:${seconds.toString().padStart(2, "0")}` };
 }
 
-function easy(slot: PlanSlot, minutes: number, mph: number, optional = false, range?: string): PlanSession {
-  return {
-    slot,
-    title: optional ? "Optional easy run" : "Easy run",
-    optional,
-    quality: false,
-    summary: range ? `${range} easy at ${mph.toFixed(1)} mph. Suggested ${minutes} min.` : `${minutes} min easy at ${mph.toFixed(1)} mph.`,
-    blocks: [{ type: "running", minutes, speedMph: mph }],
-  };
-}
+const shortRunMinutes = [0, 10, 12, 12, 10, 14, 14, 15, 12, 15, 16, 16, 12, 16, 16, 18, 12];
+const longRunMinutes = [0, 12, 15, 20, 16, 22, 24, 26, 19, 27, 28, 30, 24, 28, 30, 32, 25];
 
-function repeats(options: {
-  slot: PlanSlot;
-  title: string;
-  reps: number;
-  minutes: number;
-  seconds?: number;
-  speed: number;
-  recovery: number;
-  label?: string;
-  summary: string;
-}): PlanSession {
-  return {
-    slot: options.slot,
-    title: options.title,
-    quality: true,
-    summary: options.summary,
-    blocks: [
-      { type: "warmup", minutes: 3, speedMph: 3 },
-      {
-        type: "running",
-        minutes: options.minutes,
-        seconds: options.seconds,
-        speedMph: options.speed,
-        repeats: options.reps,
-        recoveryMinutes: options.recovery,
-        recoverySpeed: 3,
-        label: options.label,
-      },
-      { type: "cooldown", minutes: 3, speedMph: 3 },
-    ],
-  };
-}
+export const runningProgram: WeekPlan[] = buildTrainingProgram();
 
-const fourHundred = (mph: number) => repClock(400, mph);
-const eightHundred = (mph: number) => repClock(800, mph);
-
-export const runningProgram: WeekPlan[] = [
-  {
-    week: 1,
-    phase: "Base",
-    recovery: false,
-    note: "Start from the 10-minute benchmark. Easy pace stays near 5.5 mph.",
-    sessions: [
-      easy("tuesday", 10, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Short intervals",
-        reps: 4,
-        minutes: 1,
-        speed: 6,
-        recovery: 2,
-        summary: "4×1 min at 6.0 mph with 2 min walking recovery.",
-      }),
-      easy("weekend", 12, 5.5, true, "10–15 min"),
-    ],
-  },
-  {
-    week: 2,
-    phase: "Base",
-    recovery: false,
-    note: "Add a little continuous time before adding speed.",
-    sessions: [
-      easy("tuesday", 12, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Short intervals",
-        reps: 5,
-        minutes: 1,
-        speed: 6,
-        recovery: 2,
-        summary: "5×1 min at 6.0 mph with 2 min walking recovery.",
-      }),
-      easy("weekend", 18, 5.5, true, "15–20 min"),
-    ],
-  },
-  {
-    week: 3,
-    phase: "Base",
-    recovery: false,
-    note: "The Friday reps get longer. The speed stays at 6.0 mph.",
-    sessions: [
-      easy("tuesday", 15, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Longer intervals",
-        reps: 4,
-        minutes: 2,
-        speed: 6,
-        recovery: 2,
-        summary: "4×2 min at 6.0 mph with 2 min walking recovery.",
-      }),
-      easy("weekend", 20, 5.5, true, "20 min"),
-    ],
-  },
-  {
-    week: 4,
-    phase: "Base",
-    recovery: true,
-    note: "Recovery week. Cut the volume and keep the intervals controlled.",
-    sessions: [
-      easy("tuesday", 10, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Controlled intervals",
-        reps: 3,
-        minutes: 1,
-        speed: 6,
-        recovery: 2,
-        summary: "3×1 min controlled at 6.0 mph. Smooth, not a sprint.",
-      }),
-      easy("weekend", 12, 5.5, true, "10–15 min"),
-    ],
-  },
-  {
-    week: 5,
-    phase: "Continuous",
-    recovery: false,
-    note: "Build the Tuesday run again. Friday stays at the same interval speed.",
-    sessions: [
-      easy("tuesday", 18, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Longer intervals",
-        reps: 4,
-        minutes: 2,
-        speed: 6,
-        recovery: 2,
-        summary: "4×2 min at 6.0 mph with 2 min walking recovery.",
-      }),
-      easy("weekend", 22, 5.5, true, "20–25 min"),
-    ],
-  },
-  {
-    week: 6,
-    phase: "Continuous",
-    recovery: false,
-    note: "One more easy minute block, then a few more 2-minute reps.",
-    sessions: [
-      easy("tuesday", 20, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Longer intervals",
-        reps: 5,
-        minutes: 2,
-        speed: 6,
-        recovery: 2,
-        summary: "5×2 min at 6.0 mph with 2 min walking recovery.",
-      }),
-      easy("weekend", 25, 5.5, true, "25 min"),
-    ],
-  },
-  {
-    week: 7,
-    phase: "Continuous",
-    recovery: false,
-    note: "Continuous time is still the priority. The intervals step from 2 minutes to 3.",
-    sessions: [
-      easy("tuesday", 22, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Longer intervals",
-        reps: 3,
-        minutes: 3,
-        speed: 6,
-        recovery: 2,
-        summary: "3×3 min at 6.0 mph with 2 min walking recovery.",
-      }),
-      easy("weekend", 25, 5.5, true, "25 min"),
-    ],
-  },
-  {
-    week: 8,
-    phase: "Continuous",
-    recovery: true,
-    note: "Recovery week before 400 m work.",
-    sessions: [
-      easy("tuesday", 15, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Controlled intervals",
-        reps: 4,
-        minutes: 1,
-        speed: 6,
-        recovery: 2,
-        summary: "4×1 min controlled at 6.0 mph.",
-      }),
-      easy("weekend", 15, 5.5, true, "15 min"),
-    ],
-  },
-  {
-    week: 9,
-    phase: "Speed introduction",
-    recovery: false,
-    note: "First 400 m session. The pace is far below both goal speeds.",
-    sessions: [
-      easy("tuesday", 25, 5.5),
-      repeats({
-        slot: "friday",
-        title: "400 m intervals",
-        reps: 6,
-        minutes: fourHundred(6.5).minutes,
-        seconds: fourHundred(6.5).seconds,
-        speed: 6.5,
-        recovery: 2,
-        label: "400 m",
-        summary: `6×400 m at 6.5 mph (about ${fourHundred(6.5).text}) with 2 min walking recovery.`,
-      }),
-      easy("weekend", 20, 5.5, true, "20–25 min"),
-    ],
-  },
-  {
-    week: 10,
-    phase: "Speed introduction",
-    recovery: false,
-    note: "Repeat the 400 m pace. Speed waits until those reps feel repeatable.",
-    sessions: [
-      easy("tuesday", 25, 5.5),
-      repeats({
-        slot: "friday",
-        title: "400 m intervals",
-        reps: 6,
-        minutes: fourHundred(6.5).minutes,
-        seconds: fourHundred(6.5).seconds,
-        speed: 6.5,
-        recovery: 2,
-        label: "400 m",
-        summary: `6×400 m at 6.5 mph (about ${fourHundred(6.5).text}). Same speed as last week.`,
-      }),
-      easy("weekend", 25, 5.5, true, "25 min"),
-    ],
-  },
-  {
-    week: 11,
-    phase: "Speed introduction",
-    recovery: false,
-    note: "800 m reps are slower than the 400s. The extra length is the change.",
-    sessions: [
-      easy("tuesday", 28, 5.5),
-      repeats({
-        slot: "friday",
-        title: "800 m intervals",
-        reps: 3,
-        minutes: eightHundred(6.2).minutes,
-        seconds: eightHundred(6.2).seconds,
-        speed: 6.2,
-        recovery: 3,
-        label: "800 m",
-        summary: `3×800 m at 6.2 mph (about ${eightHundred(6.2).text}) with 3 min walking recovery.`,
-      }),
-      easy("weekend", 20, 5.5, true, "20 min"),
-    ],
-  },
-  {
-    week: 12,
-    phase: "Speed introduction",
-    recovery: true,
-    note: "Recovery week before 5K-pace work.",
-    sessions: [
-      easy("tuesday", 20, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Controlled intervals",
-        reps: 4,
-        minutes: 1,
-        speed: 6.2,
-        recovery: 2,
-        summary: "4×1 min controlled at 6.2 mph.",
-      }),
-      easy("weekend", 15, 5.5, true, "15 min"),
-    ],
-  },
-  {
-    week: 13,
-    phase: "Goal-pace preparation",
-    recovery: false,
-    note: "5K-pace work starts at 6.8 mph. The sub-25 target is 7.46 mph, not this workout.",
-    sessions: [
-      easy("tuesday", 28, 5.6),
-      repeats({
-        slot: "friday",
-        title: "5K-pace reps",
-        reps: 3,
-        minutes: 5,
-        speed: 6.8,
-        recovery: 2,
-        label: "5K-pace prep",
-        summary: "3×5 min at 6.8 mph. Quicker than easy, still slower than 7.46 mph.",
-      }),
-      easy("weekend", 25, 5.5, true, "25 min"),
-    ],
-  },
-  {
-    week: 14,
-    phase: "Goal-pace preparation",
-    recovery: false,
-    note: "Short mile-pace preparation. A 7:00 mile is about 8.57 mph; these reps are 7.2 mph.",
-    sessions: [
-      easy("tuesday", 28, 5.6),
-      repeats({
-        slot: "friday",
-        title: "Mile-pace prep",
-        reps: 6,
-        minutes: fourHundred(7.2).minutes,
-        seconds: fourHundred(7.2).seconds,
-        speed: 7.2,
-        recovery: 2,
-        label: "400 m mile prep",
-        summary: `6×400 m at 7.2 mph (about ${fourHundred(7.2).text}). Short reps, full recovery.`,
-      }),
-      easy("weekend", 25, 5.5, true, "25 min"),
-    ],
-  },
-  {
-    week: 15,
-    phase: "Goal-pace preparation",
-    recovery: false,
-    note: "A little less easy running so the Friday reps can stay controlled.",
-    sessions: [
-      easy("tuesday", 22, 5.5),
-      repeats({
-        slot: "friday",
-        title: "5K-pace reps",
-        reps: 3,
-        minutes: 6,
-        speed: 6.6,
-        recovery: 3,
-        label: "5K-pace prep",
-        summary: "3×6 min at 6.6 mph with 3 min walking recovery.",
-      }),
-      easy("weekend", 20, 5.5, true, "20 min"),
-    ],
-  },
-  {
-    week: 16,
-    phase: "Goal-pace preparation",
-    recovery: true,
-    note: "Last training week. Keep Friday controlled. Monday is a rest or an easy walk before the testing week.",
-    sessions: [
-      easy("tuesday", 15, 5.5),
-      repeats({
-        slot: "friday",
-        title: "Controlled intervals",
-        reps: 4,
-        minutes: 1,
-        speed: 7,
-        recovery: 2,
-        summary: "4×1 min controlled at 7.0 mph. Still well under 8.57 mph.",
-      }),
-      easy("weekend", 12, 5.5, true, "10–15 min"),
-    ],
-  },
-  {
+function buildTrainingProgram(): WeekPlan[] {
+  const weeks: WeekPlan[] = [];
+  for (let week = 1; week <= 16; week += 1) {
+    const deload = week === 4 || week === 8 || week === 12 || week === 16;
+    weeks.push({
+      week,
+      phase: week <= 4 ? "Base and technique" : week <= 8 ? "Volume and strength" : week <= 12 ? "Strength development" : "Strength emphasis",
+      recovery: deload,
+      note: deload
+        ? "Lighter running week. Hold the duration if recovery is behind, and keep Thursday shorter."
+        : "Easy runs stay conversational, around RPE 3–4. Thursday is the only speed day. Change the day if you need to.",
+      sessions: [
+        easyDay("tuesday", shortRunMinutes[week] ?? 12),
+        qualityDay(week),
+        easyDay("weekend", longRunMinutes[week] ?? 25),
+      ],
+    });
+  }
+  weeks.push({
     week: TESTING_WEEK,
     phase: "Testing",
     recovery: true,
     testing: true,
     note: "Recovery and testing, not a normal training week. No hard intervals. The Wednesday squat is about half of a usual lower-body day and has no hard lower accessories. Keep at least one full day between the mile and the 5K. Do not run a maximal test if your knee hurts or you are unusually sore. Move the test instead.",
-    sessions: [
-      mileTrial(),
-      fiveKTrial(),
+    sessions: [mileTrial(), fiveKTrial(), recoveryReview()],
+  });
+  return weeks;
+}
+
+function easyDay(slot: PlanSlot, minutes: number): PlanSession {
+  return {
+    slot,
+    title: slot === "weekend" ? "Longer easy run" : "Short easy run",
+    quality: false,
+    choice: "easy",
+    summary: easySummary(minutes, "steady"),
+    blocks: easyFormatBlocks(minutes, "steady"),
+  };
+}
+
+function qualityDay(week: number): PlanSession {
+  const focus: QualityFocus = week % 2 === 0 ? "fivek" : "mile";
+  return {
+    slot: "thursday",
+    title: focus === "mile" ? "Mile-focused intervals" : "5K-focused intervals",
+    quality: true,
+    choice: "quality",
+    qualityFocus: focus,
+    summary: qualitySummary(week, focus),
+    blocks: qualityBlocks(week, focus),
+  };
+}
+
+function recoveryReview(): PlanSession {
+  return {
+    slot: "weekend",
+    title: "Recovery and review",
+    optional: true,
+    quality: false,
+    fixed: true,
+    summary: "Optional easy walk. Review the mile and 5K against the 10-minute, 5.5 mph baseline. No intervals.",
+    blocks: [{ type: "warmup", minutes: 15, speedMph: 3, label: "Optional walk" }],
+  };
+}
+
+export function easySummary(minutes: number, format: EasyFormat): string {
+  const shared = `${minutes} min is the suggested length. Keep it at RPE 3–4, slow enough for full sentences. The speeds are a start, not a requirement.`;
+  if (format === "progressive") return `Progressive easy run. ${shared} Speed rises every 5 minutes and the last piece eases back.`;
+  if (format === "fartlek") return `Easy fartlek. ${shared} The quicker minute stays conversational.`;
+  if (format === "variable") return `Variable steady run. ${shared} Small speed changes, same easy effort.`;
+  return `Steady easy run. ${shared}`;
+}
+
+export function easyFormatBlocks(minutes: number, format: EasyFormat): PlanBlock[] {
+  if (format === "progressive") return paceSteps(minutes, [5.2, 5.4, 5.6, 5.3], 5);
+  if (format === "fartlek") return fartlek(minutes);
+  if (format === "variable") return paceSteps(minutes, [5.3, 5.5, 5.4, 5.6], 4);
+  return [{ type: "running", minutes, speedMph: 5.5, label: "Easy, conversational" }];
+}
+
+function paceSteps(minutes: number, speeds: number[], chunk: number): PlanBlock[] {
+  const blocks: PlanBlock[] = [];
+  let left = minutes;
+  let index = 0;
+  while (left > 0) {
+    const speed = speeds[Math.min(index, speeds.length - 1)] ?? 5.5;
+    const piece = index === speeds.length - 1 ? left : Math.min(chunk, left);
+    blocks.push({ type: "running", minutes: piece, speedMph: speed, label: `${speed.toFixed(1)} mph` });
+    left -= piece;
+    index += 1;
+  }
+  return blocks;
+}
+
+function fartlek(minutes: number): PlanBlock[] {
+  const blocks: PlanBlock[] = [];
+  let left = minutes;
+  while (left > 0) {
+    const easy = Math.min(3, left);
+    blocks.push({ type: "running", minutes: easy, speedMph: 5.3, label: "Comfortable" });
+    left -= easy;
+    if (left <= 0) break;
+    const fast = Math.min(1, left);
+    blocks.push({ type: "running", minutes: fast, speedMph: 5.8, label: "Slightly quicker" });
+    left -= fast;
+  }
+  return blocks;
+}
+
+export function qualitySummary(week: number, focus: QualityFocus): string {
+  const effort = week <= 4 ? "RPE 5–6" : week <= 8 ? "RPE 6–7" : "RPE 7–8";
+  const work = focus === "mile" ? "400 m repeats" : "comfortably hard repeats";
+  return `${work} at about ${effort}. Warm-up, strides, and cooldown stay out of the running distance. Stay well under goal pace until the logs support more speed.`;
+}
+
+export function qualityBlocks(week: number, focus: QualityFocus): PlanBlock[] {
+  const deload = week === 4 || week === 8 || week === 12 || week === 16;
+  const warmup: PlanBlock[] = [
+    { type: "warmup", minutes: 3, speedMph: 3, label: "Walk" },
+    { type: "warmup", minutes: week <= 4 ? 5 : 7, speedMph: 5, label: "Easy jog" },
+    { type: "warmup", minutes: 0, seconds: 20, speedMph: 6.2, repeats: 3, recoveryMinutes: 1, recoverySpeed: 3, label: "Stride" },
+  ];
+  const cooldown: PlanBlock = { type: "cooldown", minutes: deload ? 5 : 8, speedMph: 3, label: "Cooldown" };
+  if (focus === "mile") {
+    const reps = deload ? 4 : week <= 3 ? 4 : 6;
+    const speed = week <= 4 ? 6 : week <= 8 ? 6.3 : week <= 12 ? 6.6 : 6.8;
+    const clock = repClock(400, speed);
+    return [
+      ...warmup,
       {
-        slot: "weekend",
-        title: "Recovery and review",
-        optional: true,
-        quality: false,
-        fixed: true,
-        summary: "Optional easy walk. Review the mile and 5K against the 10-minute, 5.5 mph baseline. No intervals.",
-        blocks: [{ type: "warmup", minutes: 15, speedMph: 3, label: "Optional walk" }],
+        type: "running",
+        minutes: clock.minutes,
+        seconds: clock.seconds,
+        speedMph: speed,
+        repeats: reps,
+        recoveryMinutes: 2,
+        recoverySpeed: 3,
+        label: "400 m",
       },
-    ],
-  },
-];
+      cooldown,
+    ];
+  }
+  const reps = deload ? 2 : 3;
+  const minutes = week <= 4 ? 5 : week <= 8 ? 6 : week <= 12 ? 7 : 8;
+  const speed = week <= 4 ? 6 : week <= 8 ? 6.2 : week <= 12 ? 6.4 : 6.5;
+  return [
+    ...warmup,
+    {
+      type: "running",
+      minutes,
+      speedMph: speed,
+      repeats: reps,
+      recoveryMinutes: week <= 4 ? 2 : 3,
+      recoverySpeed: 3,
+      label: "5K-effort repeat",
+    },
+    cooldown,
+  ];
+}
+
+export function recommendEasyFormat(week: number, lastRpe: number | null): EasyFormat {
+  if (lastRpe != null && lastRpe >= 5) return "steady";
+  const formats: EasyFormat[] = ["progressive", "fartlek", "variable"];
+  return formats[(week - 1) % formats.length] ?? "steady";
+}
+
+export function sessionVariant(session: PlanSession, week: number, format: EasyFormat, focus: QualityFocus): PlanSession {
+  if (session.choice === "easy") {
+    const minutes = session.blocks.reduce((total, block) => total + (block.type === "running" ? block.minutes : 0), 0);
+    return { ...session, easyFormat: format, summary: easySummary(minutes, format), blocks: easyFormatBlocks(minutes, format) };
+  }
+  if (session.choice === "quality") {
+    return {
+      ...session,
+      qualityFocus: focus,
+      title: focus === "mile" ? "Mile-focused intervals" : "5K-focused intervals",
+      summary: qualitySummary(week, focus),
+      blocks: qualityBlocks(week, focus),
+    };
+  }
+  return session;
+}
 
 function effortBlock(miles: number, mph: number, label: string): PlanBlock {
   const totalSeconds = Math.max(1, Math.round((miles / mph) * 3600));
@@ -519,6 +328,8 @@ export function manualTest(kind: TestKind, date = todayInputDate()): RunWorkout 
     testKind: kind,
     incline: 1,
     continuous: true,
+    easyFormat: null,
+    qualityFocus: null,
   };
 }
 
@@ -552,6 +363,7 @@ export function currentProgramWeek(start: string, today = todayInputDate()): num
 export function sessionDate(start: string, week: number, slot: PlanSlot): string {
   const tuesday = addDays(start, (week - 1) * 7);
   if (slot === "tuesday") return tuesday;
+  if (slot === "thursday") return addDays(tuesday, 2);
   if (slot === "friday") return addDays(tuesday, 3);
   return addDays(tuesday, 4);
 }
@@ -617,6 +429,8 @@ export function plannedRun(session: PlanSession, week: number, date: string, dif
     planWeek: week,
     planSlot: session.slot,
     difficulty: session.fixed ? "planned" : difficulty,
+    easyFormat: session.easyFormat ?? null,
+    qualityFocus: session.qualityFocus ?? null,
     testKind: session.testKind ?? null,
     incline: session.testKind ? 1 : null,
     continuous: session.testKind ? true : null,
@@ -653,6 +467,10 @@ export function adviseSession(
         ? `Last logged run was ${effort}.`
         : `Last logged run was ${effort}, RPE ${previousLogged.rpe}.`,
     );
+  }
+  if (!session.quality && previousLogged?.rpe != null && previousLogged.rpe >= 5) {
+    difficulty = "easier";
+    reasons.push(`The last run was RPE ${previousLogged.rpe}, so this suggestion keeps the easy day shorter instead of adding time.`);
   }
   if (previousLogged?.rpe != null && previousLogged.rpe >= 8) {
     difficulty = "easier";

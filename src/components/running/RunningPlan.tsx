@@ -9,12 +9,14 @@ import {
   formatMph,
   planRunFor,
   plannedRun,
+  recommendEasyFormat,
   sessionDate,
+  sessionVariant,
   weekPlan,
   type PlanSession,
 } from "../../domain/runningProgram.ts";
 import { missedRequiredRuns, scheduledDate, type ScheduleOverride } from "../../domain/schedule.ts";
-import type { RunDifficulty, RunWorkout } from "../../domain/running.ts";
+import type { EasyFormat, QualityFocus, RunDifficulty, RunWorkout } from "../../domain/running.ts";
 import type { WorkoutLog } from "../../domain/workoutLog.ts";
 import { TestGuide } from "./TestGuide.tsx";
 
@@ -126,7 +128,10 @@ function PlanCard({
   const advice = adviseSession(session, weekPlan(week), date, runs, workouts, missedRequired);
   const saved = planRunFor(runs, week, session.slot);
   const [difficulty, setDifficulty] = useState<RunDifficulty>(saved?.difficulty ?? advice.difficulty);
+  const [format, setFormat] = useState<EasyFormat>(saved?.easyFormat ?? recommendEasyFormat(week, adviceLastRpe(runs)));
+  const [focus, setFocus] = useState<QualityFocus>(saved?.qualityFocus ?? session.qualityFocus ?? "mile");
   const chosen = saved ? (saved.difficulty ?? "planned") : difficulty;
+  const ready = sessionVariant(session, week, format, focus);
 
   return (
     <article className={saved ? `session-card is-${saved.status === "skipped" ? "skipped" : "done"}` : "session-card"}>
@@ -137,13 +142,31 @@ function PlanCard({
       <span className={`status-pill is-${saved ? (saved.status === "skipped" ? "skipped" : "done") : "upcoming"}`}>
         {saved ? (saved.status === "skipped" ? "Skipped" : "Logged") : "Scheduled"}
       </span>
-      <strong>{session.title}</strong>
+      <strong>{ready.title}</strong>
       <span>{formatDisplayDate(date)}</span>
-      <span>{session.summary}</span>
+      <span>{ready.summary}</span>
       <span>{advice.reasons.join(" ")}</span>
       {saved ? (
         <span className="meta">{saved.status === "skipped" ? "Skipped" : `Logged${saved.rpe == null ? "" : ` · RPE ${saved.rpe}`}`}</span>
       ) : null}
+      {saved || session.choice !== "easy" ? null : (
+        <div className="inline-actions">
+          {(["steady", "progressive", "fartlek", "variable"] as const).map((option) => (
+            <button key={option} type="button" className={format === option ? "button is-selected" : "button"} onClick={() => setFormat(option)}>
+              {option === "steady" ? "Steady" : option === "progressive" ? "Progressive" : option === "fartlek" ? "Fartlek" : "Variable"}
+            </button>
+          ))}
+        </div>
+      )}
+      {saved || session.choice !== "quality" ? null : (
+        <div className="inline-actions">
+          {(["mile", "fivek"] as const).map((option) => (
+            <button key={option} type="button" className={focus === option ? "button is-selected" : "button"} onClick={() => setFocus(option)}>
+              {option === "mile" ? "Mile repeats" : "5K repeats"}
+            </button>
+          ))}
+        </div>
+      )}
       {saved || session.fixed ? null : (
         <div className="inline-actions">
           {difficulties.map((option) => (
@@ -162,7 +185,7 @@ function PlanCard({
         <button
           type="button"
           className="button primary"
-          onClick={() => onOpen(saved ? { ...saved, difficulty: chosen } : plannedRun(session, week, date, chosen))}
+          onClick={() => onOpen(saved ? { ...saved, difficulty: chosen } : plannedRun(ready, week, date, chosen))}
         >
           {saved ? "Open" : "Start"}
         </button>
@@ -172,7 +195,7 @@ function PlanCard({
             className="button"
             onClick={() =>
               onSkip({
-                ...(saved ?? plannedRun(session, week, date, chosen)),
+                ...(saved ?? plannedRun(ready, week, date, chosen)),
                 status: "skipped",
                 difficulty: chosen,
               })
@@ -184,4 +207,11 @@ function PlanCard({
       </div>
     </article>
   );
+}
+
+function adviceLastRpe(runs: RunWorkout[]): number | null {
+  const latest = runs
+    .filter((run) => run.status === "logged")
+    .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt))[0];
+  return latest?.rpe ?? null;
 }

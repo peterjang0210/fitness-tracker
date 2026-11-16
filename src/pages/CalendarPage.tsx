@@ -46,7 +46,7 @@ export function CalendarPage() {
       return;
     }
     const session = plan.sessions.find((entry) => entry.slot === item.key);
-    if (!session || (item.key !== "tuesday" && item.key !== "friday" && item.key !== "weekend")) return;
+    if (!session || (item.key !== "tuesday" && item.key !== "thursday" && item.key !== "friday" && item.key !== "weekend")) return;
     const existing = planRunFor(runs, item.week, item.key);
     const advice = adviseSession(session, plan, item.date, runs, workouts, missedRequiredRuns(runningProgramStart, item.date, runs, scheduleOverrides));
     saveRun({ ...(existing ?? plannedRun(session, item.week, item.date, advice.difficulty)), status: "skipped" });
@@ -56,7 +56,7 @@ export function CalendarPage() {
     <Page
       eyebrow="Schedule"
       title="Program"
-      lede="Tuesday bench, Wednesday squat, and Friday’s lighter session for the training weeks. Week 17 is the testing week: a mile, an easy squat, and a 5K. Move a session by changing its date."
+      lede="Tuesday bench and a short easy run, Wednesday squat, Thursday speed work, Friday paused bench with a lighter squat, and a longer easy run on Saturday. Week 17 is the testing week. Move any session by changing its date."
     >
       <div className="editor-bar">
         <div className="inline-actions">

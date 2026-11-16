@@ -2,6 +2,7 @@ import type { LibraryExercise } from "../storage/appData.ts";
 
 export const builtinExercises: LibraryExercise[] = [
   { id: "flat-bench", name: "Bench press", muscleGroup: "Chest", category: "compound", equipment: "Barbell", instructions: "Touch the chest and press to lockout.", defaultSets: 3, defaultReps: "5" },
+  { id: "paused-bench", name: "Paused bench press", muscleGroup: "Chest", category: "compound", equipment: "Barbell", instructions: "Pause on the chest, stay tight, then press.", defaultSets: 3, defaultReps: "6" },
   { id: "incline-db-press", name: "Incline dumbbell press", muscleGroup: "Chest", category: "compound", equipment: "Dumbbell", instructions: "", defaultSets: 2, defaultReps: "8–10" },
   { id: "bodyweight-dips", name: "Dips", muscleGroup: "Chest", category: "compound", equipment: "Bodyweight", instructions: "Lean slightly forward. Stop if the shoulder pinches.", defaultSets: 3, defaultReps: "6–10" },
   { id: "cable-fly", name: "Cable flies", muscleGroup: "Chest", category: "isolation", equipment: "Cable", instructions: "", defaultSets: 2, defaultReps: "12–15" },

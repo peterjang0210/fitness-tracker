@@ -46,7 +46,7 @@ export const sessionTemplates: SessionTemplate[] = [
         repTarget: "5",
         prescription: "3×5",
         suggestedWeightLb: 160,
-        baseline: "Previous max 215 lb. Recently completed 155 lb for 3×5, final set RPE 6–7.",
+        baseline: "Reference point: 160 lb for 3×5 around RPE 5. Historical max about 215 lb. Logged sets replace this reference.",
       },
       {
         exerciseKey: "incline-db-press",
@@ -105,9 +105,8 @@ export const sessionTemplates: SessionTemplate[] = [
         sets: 3,
         repTarget: "5",
         prescription: "3×5",
-        suggestedWeightLb: 135,
-        baseline:
-          "Previous max 375 lb. Estimated current capacity is 185×5, followed by significant soreness. Recent leg training has been inconsistent.",
+        suggestedWeightLb: 145,
+        baseline: "Reference point: 145 lb for 3×5 around RPE 2–3. Historical max about 375 lb. Logged sets replace this reference.",
       },
       {
         exerciseKey: "squat-backoff",
@@ -151,10 +150,19 @@ export const sessionTemplates: SessionTemplate[] = [
   },
   {
     key: "friday-secondary",
-    name: "Secondary squat and upper body",
+    name: "Secondary bench and light squat",
     day: "Friday",
-    summary: "Light squat 3×5, then upper-body accessories.",
+    summary: "Paused bench, a lighter squat, and a short list of upper-body accessories.",
     exercises: [
+      {
+        exerciseKey: "paused-bench",
+        name: "Paused bench press",
+        sets: 3,
+        repTarget: "6",
+        prescription: "3×6",
+        suggestedWeightLb: 125,
+        baseline: "Second bench day. Start lighter than Tuesday and progress it on its own. Target about RPE 6–7.",
+      },
       {
         exerciseKey: "light-squat",
         name: "Light squat",
@@ -177,13 +185,6 @@ export const sessionTemplates: SessionTemplate[] = [
         sets: 3,
         repTarget: "8–12",
         prescription: "3×8–12",
-      },
-      {
-        exerciseKey: "cable-fly",
-        name: "Cable fly",
-        sets: 2,
-        repTarget: "12–15",
-        prescription: "2×12–15",
       },
       {
         exerciseKey: "cable-pullover",
@@ -233,7 +234,55 @@ export function sessionTemplate(key: ProgramSessionKey, week?: number | null): S
   if (week === TESTING_WEEK && key === "wednesday-squat") return testingSquat;
   const template = sessionTemplates.find((item) => item.key === key);
   if (!template) throw new Error(`Unknown session ${key}`);
+  if (week == null || week < 1 || week > 16) return template;
+  return applyPhase(structuredClone(template), week);
+}
+
+function applyPhase(template: SessionTemplate, week: number): SessionTemplate {
+  const deload = week === 4 || week === 8 || week === 12 || week === 16;
+  template.summary = phaseSummary(template.key, week, deload);
+  template.exercises = template.exercises.map((exercise) => {
+    const shaped = phaseSets(template.key, exercise, week, deload);
+    return { ...exercise, ...shaped };
+  });
   return template;
+}
+
+function phaseSummary(key: ProgramSessionKey, week: number, deload: boolean): string {
+  if (deload) return `Week ${week} is a lighter week. Volume is about half of the surrounding weeks.`;
+  if (key === "tuesday-bench") return `Week ${week} primary bench. Upper-body accessories follow the main sets.`;
+  if (key === "wednesday-squat") return `Week ${week} primary squat. Keep the accessories lighter than the squat.`;
+  return `Week ${week} paused bench, light squat, and a short accessory list.`;
+}
+
+function phaseSets(
+  key: ProgramSessionKey,
+  exercise: ExerciseTemplate,
+  week: number,
+  deload: boolean,
+): Pick<ExerciseTemplate, "sets" | "repTarget" | "prescription"> {
+  if ((key === "tuesday-bench" && exercise.exerciseKey === "flat-bench") || (key === "wednesday-squat" && exercise.exerciseKey === "barbell-squat")) {
+    if (week <= 3) return { sets: 3, repTarget: "5", prescription: "3×5" };
+    if (week === 4) return { sets: 2, repTarget: "5", prescription: "2×5" };
+    if (week <= 7) return { sets: 4, repTarget: "5", prescription: "4×5" };
+    if (week === 8) return { sets: 2, repTarget: "5", prescription: "2×5" };
+    if (week <= 11) return { sets: 4, repTarget: "4", prescription: "4×4" };
+    if (week === 12) return { sets: 2, repTarget: "4", prescription: "2×4" };
+    if (week <= 15) return { sets: 4, repTarget: "3", prescription: "1×3 top, 3×3 back-off" };
+    return { sets: 2, repTarget: "3", prescription: "1×3 top, 1×3 back-off" };
+  }
+  if (exercise.exerciseKey === "paused-bench") {
+    if (week <= 8) return { sets: deload ? 2 : 3, repTarget: "6", prescription: deload ? "2×6" : "3×6" };
+    return { sets: deload ? 2 : 3, repTarget: "5", prescription: deload ? "2×5" : "3×5" };
+  }
+  if (exercise.exerciseKey === "light-squat") {
+    if (week >= 13) return { sets: 2, repTarget: "3", prescription: "2×3" };
+    if (deload) return { sets: 2, repTarget: "5", prescription: "2×5" };
+    return { sets: 3, repTarget: "5", prescription: "3×5" };
+  }
+  if (!deload) return { sets: exercise.sets, repTarget: exercise.repTarget, prescription: exercise.prescription };
+  const sets = Math.max(1, Math.round(exercise.sets * 0.5));
+  return { sets, repTarget: exercise.repTarget, prescription: `${sets}×${exercise.repTarget}` };
 }
 
 export function exerciseTemplate(exerciseKey: string): ExerciseTemplate | undefined {

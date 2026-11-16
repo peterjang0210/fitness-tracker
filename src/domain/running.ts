@@ -21,9 +21,11 @@ export interface RunSegment {
 }
 
 export type RunStatus = "logged" | "skipped";
-export type PlanSlot = "tuesday" | "friday" | "weekend";
+export type PlanSlot = "tuesday" | "thursday" | "friday" | "weekend";
 export type RunDifficulty = "easier" | "planned" | "harder";
 export type TestKind = "mile" | "fivek";
+export type EasyFormat = "steady" | "progressive" | "fartlek" | "variable";
+export type QualityFocus = "mile" | "fivek";
 
 export interface RunWorkout {
   id: string;
@@ -40,6 +42,8 @@ export interface RunWorkout {
   testKind: TestKind | null;
   incline: number | null;
   continuous: boolean | null;
+  easyFormat: EasyFormat | null;
+  qualityFocus: QualityFocus | null;
 }
 
 export interface RunTemplate {
@@ -60,8 +64,22 @@ export function createSegment(partial?: Partial<Omit<RunSegment, "id">>): RunSeg
   };
 }
 
-export function unplannedRunFields(): Pick<RunWorkout, "rpe" | "status" | "planWeek" | "planSlot" | "difficulty" | "testKind" | "incline" | "continuous"> {
-  return { rpe: null, status: "logged", planWeek: null, planSlot: null, difficulty: null, testKind: null, incline: null, continuous: null };
+export function unplannedRunFields(): Pick<
+  RunWorkout,
+  "rpe" | "status" | "planWeek" | "planSlot" | "difficulty" | "testKind" | "incline" | "continuous" | "easyFormat" | "qualityFocus"
+> {
+  return {
+    rpe: null,
+    status: "logged",
+    planWeek: null,
+    planSlot: null,
+    difficulty: null,
+    testKind: null,
+    incline: null,
+    continuous: null,
+    easyFormat: null,
+    qualityFocus: null,
+  };
 }
 
 export function durationMinutes(segment: Pick<RunSegment, "minutes" | "seconds">): number {
@@ -208,7 +226,9 @@ export function normalizeRun(value: unknown): RunWorkout | null {
     testKind: value.testKind === "mile" || value.testKind === "fivek" ? value.testKind : null,
     incline: typeof value.incline === "number" && Number.isFinite(value.incline) ? value.incline : null,
     continuous: value.continuous === true ? true : value.continuous === false ? false : null,
-    planSlot: value.planSlot === "tuesday" || value.planSlot === "friday" || value.planSlot === "weekend" ? value.planSlot : null,
+    planSlot: value.planSlot === "tuesday" || value.planSlot === "thursday" || value.planSlot === "friday" || value.planSlot === "weekend" ? value.planSlot : null,
+    easyFormat: value.easyFormat === "steady" || value.easyFormat === "progressive" || value.easyFormat === "fartlek" || value.easyFormat === "variable" ? value.easyFormat : null,
+    qualityFocus: value.qualityFocus === "mile" || value.qualityFocus === "fivek" ? value.qualityFocus : null,
     difficulty: value.difficulty === "easier" || value.difficulty === "planned" || value.difficulty === "harder" ? value.difficulty : null,
   };
 }

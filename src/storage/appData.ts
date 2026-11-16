@@ -209,7 +209,7 @@ function normalizeOverride(value: unknown): ScheduleOverride | null {
   if (kind !== "strength" && kind !== "run") return null;
   if (typeof key !== "string") return null;
   if (kind === "strength" && !isProgramKey(key)) return null;
-  if (kind === "run" && key !== "tuesday" && key !== "friday" && key !== "weekend") return null;
+  if (kind === "run" && key !== "tuesday" && key !== "thursday" && key !== "friday" && key !== "weekend") return null;
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   return { week, kind, key, date };
 }

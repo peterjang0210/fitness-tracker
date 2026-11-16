@@ -4,7 +4,7 @@ import { Page } from "../components/layout/Page.tsx";
 import { RunEditor } from "../components/running/RunEditor.tsx";
 import { RunningPlan } from "../components/running/RunningPlan.tsx";
 import { scheduledDate } from "../domain/schedule.ts";
-import { manualTest, planRunFor, plannedRun, PROGRAM_WEEKS, sessionDate, weekPlan } from "../domain/runningProgram.ts";
+import { manualTest, planRunFor, plannedRun, PROGRAM_WEEKS, recommendEasyFormat, sessionDate, sessionVariant, weekPlan } from "../domain/runningProgram.ts";
 import { formatDisplayDate } from "../domain/workoutLog.ts";
 import {
   benchmarkTotals,
@@ -55,14 +55,16 @@ export function RunningPage() {
     }
     const slot = params.get("slot");
     const week = Number(params.get("week"));
-    if ((slot !== "tuesday" && slot !== "friday" && slot !== "weekend") || week < 1 || week > PROGRAM_WEEKS) return;
+    if ((slot !== "tuesday" && slot !== "thursday" && slot !== "friday" && slot !== "weekend") || week < 1 || week > PROGRAM_WEEKS) return;
     const session = weekPlan(week).sessions.find((item) => item.slot === slot);
     if (!session) return;
     const difficulty = params.get("difficulty");
     const chosen = difficulty === "easier" || difficulty === "harder" || difficulty === "planned" ? difficulty : "planned";
     const date = params.get("date") ?? scheduledDate(scheduleOverrides, week, "run", slot, sessionDate(runningProgramStart, week, slot));
     const existing = planRunFor(runs, week, slot);
-    setDraft(existing ?? plannedRun(session, week, date, chosen));
+    const latest = runs.filter((run) => run.status === "logged").sort((a, b) => b.date.localeCompare(a.date))[0];
+    const ready = sessionVariant(session, week, recommendEasyFormat(week, latest?.rpe ?? null), session.qualityFocus ?? "mile");
+    setDraft(existing ?? plannedRun(ready, week, date, chosen));
     setSaved(false);
     setParams({}, { replace: true });
   }, [params]);

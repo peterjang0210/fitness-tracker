@@ -236,7 +236,7 @@ function itemHref(
     const logged = matchingWorkout(workouts, start, item.week, item.key, item.date);
     return logged ? `/workouts?edit=${logged.id}` : `/workouts?start=${item.key}&date=${item.date}&week=${item.week}`;
   }
-  if (item.key === "tuesday" || item.key === "friday" || item.key === "weekend") {
+  if (item.key === "tuesday" || item.key === "thursday" || item.key === "friday" || item.key === "weekend") {
     const run = planRunFor(runs, item.week, item.key);
     if (run) return `/running?edit=${run.id}`;
   }
