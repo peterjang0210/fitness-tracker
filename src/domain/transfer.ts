@@ -81,10 +81,41 @@ export function runningCsv(data: AppData): string {
       "speedMph",
       "segmentMiles",
       "label",
+      "activity",
+      "activeMinutes",
+      "calories",
+      "heartRate",
+      "scheduledName",
     ],
   ];
   for (const run of data.runs) {
     const totals = runTotals(run.segments);
+    const shared = [run.activity, run.activeMinutes, run.calories, run.heartRate, run.scheduledName];
+    if (run.segments.length === 0) {
+      rows.push([
+        run.date,
+        run.name,
+        run.status,
+        run.rpe,
+        run.planWeek,
+        run.planSlot,
+        run.testKind,
+        run.incline,
+        run.continuous == null ? null : run.continuous ? "continuous" : "included walking",
+        0,
+        0,
+        null,
+        null,
+        null,
+        run.activity === "soccer" ? run.activeMinutes : null,
+        null,
+        null,
+        null,
+        null,
+        ...shared,
+      ]);
+      continue;
+    }
     run.segments.forEach((segment, index) => {
       rows.push([
         run.date,
@@ -106,6 +137,7 @@ export function runningCsv(data: AppData): string {
         segment.speedMph,
         Math.round(segmentDistance(segment) * 10000) / 10000,
         segment.label,
+        ...shared,
       ]);
     });
   }

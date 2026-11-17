@@ -148,10 +148,30 @@ export function bestSquatForGoal(workouts: WorkoutLog[], display: WeightUnit): n
   return best;
 }
 
-function loggedRuns(runs: RunWorkout[]): RunWorkout[] {
+function loggedRuns(runs: RunWorkout[], includeSoccer = false): RunWorkout[] {
   return runs
-    .filter((run) => run.status !== "skipped")
+    .filter((run) => run.status !== "skipped" && (includeSoccer || run.activity !== "soccer"))
     .sort((a, b) => a.date.localeCompare(b.date) || a.updatedAt.localeCompare(b.updatedAt));
+}
+
+export function weeklyActivityMinutes(runs: RunWorkout[], today = todayInputDate()): { running: number; soccer: number } {
+  const start = weekStart(today);
+  let running = 0;
+  let soccer = 0;
+  for (const run of loggedRuns(runs, true)) {
+    if (weekStart(run.date) !== start) continue;
+    if (run.activity === "soccer") soccer += run.activeMinutes ?? 0;
+    else running += runTotals(run.segments).runningMinutes;
+  }
+  return { running: Math.round(running), soccer: Math.round(soccer) };
+}
+
+export function activityDurationSeries(runs: RunWorkout[]): DatedPoint[] {
+  return loggedRuns(runs, true).flatMap((run) => {
+    const minutes = run.activity === "soccer" ? (run.activeMinutes ?? 0) : runTotals(run.segments).totalMinutes;
+    if (minutes <= 0) return [];
+    return [{ date: run.date, label: shortDate(run.date), minutes: Math.round(minutes) }];
+  });
 }
 
 export function runEffortSeries(runs: RunWorkout[]): {

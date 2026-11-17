@@ -67,11 +67,13 @@ export function weekItems(
   });
   for (const session of plan.sessions) {
     const date = scheduledDate(overrides, week, "run", session.slot, sessionDate(start, week, session.slot));
+    const saved = planRunFor(runs, week, session.slot);
+    const replaced = saved?.activity === "soccer" && saved.status !== "skipped";
     items.push({
       week,
       kind: "run",
       key: session.slot,
-      name: session.title,
+      name: replaced ? `Soccer · was ${session.title}` : session.title,
       date,
       optional: Boolean(session.optional),
       status: runStatus(runs, week, session.slot, date, today, Boolean(session.optional), Boolean(session.postponable)),

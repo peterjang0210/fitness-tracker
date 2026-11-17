@@ -79,16 +79,19 @@ function buildTrainingProgram(): WeekPlan[] {
   const weeks: WeekPlan[] = [];
   for (let week = 1; week <= 16; week += 1) {
     const deload = week === 4 || week === 8 || week === 12 || week === 16;
+    const easyOnly = week < 3;
     weeks.push({
       week,
       phase: week <= 4 ? "Base and technique" : week <= 8 ? "Volume and strength" : week <= 12 ? "Strength development" : "Strength emphasis",
       recovery: deload,
-      note: deload
-        ? "Lighter running week. Hold the duration if recovery is behind, and keep Thursday shorter."
-        : "Easy runs stay conversational, around RPE 3–4. Thursday is the only speed day. Change the day if you need to.",
+      note: easyOnly
+        ? "Easy running only. No intervals until week 3. Keep these runs conversational, around RPE 3–4."
+        : deload
+          ? "Lighter running week. Hold the duration if recovery is behind, and keep Thursday shorter."
+          : "Easy runs stay conversational, around RPE 3–4. Thursday is the only speed day. Change the day if you need to.",
       sessions: [
         easyDay("tuesday", shortRunMinutes[week] ?? 12),
-        qualityDay(week),
+        ...(easyOnly ? [] : [qualityDay(week)]),
         easyDay("weekend", longRunMinutes[week] ?? 25),
       ],
     });
@@ -330,6 +333,11 @@ export function manualTest(kind: TestKind, date = todayInputDate()): RunWorkout 
     continuous: true,
     easyFormat: null,
     qualityFocus: null,
+    activity: "run",
+    activeMinutes: null,
+    calories: null,
+    heartRate: null,
+    scheduledName: null,
   };
 }
 
@@ -434,6 +442,11 @@ export function plannedRun(session: PlanSession, week: number, date: string, dif
     testKind: session.testKind ?? null,
     incline: session.testKind ? 1 : null,
     continuous: session.testKind ? true : null,
+    activity: "run",
+    activeMinutes: null,
+    calories: null,
+    heartRate: null,
+    scheduledName: null,
   };
 }
 
@@ -456,7 +469,7 @@ export function adviseSession(
 
   const earlier = runs.filter((run) => run.date <= date);
   const previousLogged = earlier
-    .filter((run) => run.status === "logged")
+    .filter((run) => run.status === "logged" && run.activity !== "soccer")
     .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt))[0];
   const recentSkip = earlier.some((run) => run.status === "skipped" && daysBetween(run.date, date) <= 7);
   if (previousLogged) {
@@ -483,6 +496,20 @@ export function adviseSession(
     reasons.push("A required run was missed recently, so this suggestion does not add speed or volume.");
   }
   if (recentSkip) reasons.push("A recent run was skipped, so this suggestion does not add speed or volume.");
+
+  const recentSoccer = earlier
+    .filter((run) => run.activity === "soccer" && run.status === "logged" && daysBetween(run.date, date) >= 0 && daysBetween(run.date, date) <= 3)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  if (recentSoccer) {
+    const minutes = recentSoccer.activeMinutes ?? 0;
+    reasons.push(
+      `Soccer on ${formatDisplayDate(recentSoccer.date)} was ${minutes} active minutes. It counts as training and is not turned into running pace.`,
+    );
+    if (recentSoccer.rpe != null && recentSoccer.rpe >= 7) {
+      difficulty = "easier";
+      reasons.push(`That soccer effort was RPE ${recentSoccer.rpe}, so this suggestion stays easier.`);
+    }
+  }
 
   const squat = recentSquat(workouts, date);
   if (squat) {

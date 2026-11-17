@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ExerciseLog, SetLog, WorkoutLog } from "../../domain/workoutLog.ts";
 import { formatWeight } from "../../domain/strengthProgram.ts";
-import { applySetPatch, createSet, isCompletedSet, previousSummary, resizeSets, setSignature, suggestedWeight } from "../../domain/workoutLog.ts";
+import { applySetPatch, createSet, formatDisplayDate, isCompletedSet, previousExercise, resizeSets, setSignature, suggestedWeight } from "../../domain/workoutLog.ts";
 
 function numberValue(value: number | null): string {
   return value == null ? "" : String(value);
@@ -11,20 +11,6 @@ function parseNumber(value: string): number | null {
   if (value.trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function shortSuggestion(note: string, weight: number | null, unit: WorkoutLog["unit"]): string {
-  if (weight != null) {
-    const shown = formatWeight(weight, unit);
-    if (/adds|increase|adds \d/i.test(note)) return `Increase to ${shown}`;
-    if (/holds|hold|same weight was missed|lighter/i.test(note)) {
-      if (/lighter|7\.5%/i.test(note)) return `Reduce to ${shown}`;
-      return `Hold at ${shown}`;
-    }
-    if (/matches the last|Suggested weight matches/i.test(note)) return `Same as last: ${shown}`;
-    return `Suggested ${shown}`;
-  }
-  return note;
 }
 
 export function ExerciseCard({
@@ -62,7 +48,7 @@ export function ExerciseCard({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [collapsed, setCollapsed] = useState(exercise.status === "completed");
   const suggestion = suggestedWeight(exercise.exerciseKey, workout, history);
-  const previous = previousSummary(exercise.exerciseKey, workout, history);
+  const previous = compactPrevious(exercise.exerciseKey, workout, history);
   const doneCount = exercise.sets.filter(isCompletedSet).length;
   const totalSets = exercise.sets.length;
 
@@ -133,64 +119,34 @@ export function ExerciseCard({
             {doneCount}/{totalSets} sets
             {exercise.status === "completed" ? " · done" : ""}
             {exercise.status === "skipped" ? " · skipped" : ""}
+            {exercise.status === "pending" ? " · to do" : ""}
           </p>
         </div>
         {!collapsed ? (
-          <div className="status-row" role="group" aria-label={`${exercise.name} status`}>
-            {(
-              [
-                ["pending", "To do"],
-                ["completed", "Done"],
-                ["skipped", "Skip"],
-              ] as const
-            ).map(([status, label]) => (
-              <button
-                key={status}
-                type="button"
-                className={exercise.status === status ? "button is-selected" : "button"}
-                aria-pressed={exercise.status === status}
-                onClick={() => {
-                  onChange({ ...exercise, status });
-                  if (status === "completed") setCollapsed(true);
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <label className="field status-field">
+            <span>Status</span>
+            <select
+              aria-label={`${exercise.name} status`}
+              value={exercise.status}
+              onChange={(event) => {
+                const status = event.target.value as ExerciseLog["status"];
+                onChange({ ...exercise, status });
+                if (status === "completed") setCollapsed(true);
+              }}
+            >
+              <option value="pending">To do</option>
+              <option value="completed">Done</option>
+              <option value="skipped">Skip</option>
+            </select>
+          </label>
         ) : null}
       </header>
 
       {!collapsed ? (
         <>
           <div className="exercise-summary">
-            <p className="history-line">
-              <span className="summary-label">Previous</span> {previous}
-            </p>
-            <p className="history-line">
-              <span className="summary-label">Next</span>{" "}
-              {shortSuggestion(suggestion.note, suggestion.weight, workout.unit)}
-              {suggestion.weight != null ? (
-                <>
-                  {" "}
-                  <button
-                    type="button"
-                    className="button quiet"
-                    disabled={exercise.sets.every((set) => set.weight === suggestion.weight || set.status === "skipped")}
-                    onClick={fillSuggestedWeight}
-                  >
-                    Fill
-                  </button>
-                </>
-              ) : null}
-            </p>
-            {(exercise.instructions || suggestion.note.length > 80) && (
-              <details className="exercise-details">
-                <summary>Details</summary>
-                {exercise.instructions ? <p className="history-line">{exercise.instructions}</p> : null}
-                <p className="history-line">{suggestion.note}</p>
-              </details>
-            )}
+            <p className="history-line">Previous: {previous}</p>
+            <p className="history-line">Next: {suggestion.weight == null ? "enter a weight" : formatWeight(suggestion.weight, workout.unit)}</p>
           </div>
 
           <div className="set-table">
@@ -260,20 +216,17 @@ export function ExerciseCard({
                 </div>
                 <div className="set-extra">
                   <span className={isCompletedSet(set) ? "set-save" : "set-save is-pending"}>{saveLabel(set, savedSignatures)}</span>
-                  <button
-                    type="button"
-                    className={set.status === "skipped" ? "button is-selected" : "button quiet"}
-                    onClick={() => updateSet(set.id, { status: set.status === "skipped" ? "pending" : "skipped" })}
-                  >
-                    {set.status === "skipped" ? "Skipped" : "Skip"}
-                  </button>
-                  {isCompletedSet(set) ? (
-                    <button type="button" className="button quiet" onClick={() => updateSet(set.id, { status: "pending" })}>
-                      Edit
-                    </button>
-                  ) : null}
                   <details className="set-note-details">
-                    <summary>Note</summary>
+                    <summary>Options</summary>
+                    <div className="inline-actions">
+                      <button
+                        type="button"
+                        className={set.status === "skipped" ? "button is-selected" : "button quiet"}
+                        onClick={() => updateSet(set.id, { status: set.status === "skipped" ? "pending" : "skipped" })}
+                      >
+                        {set.status === "skipped" ? "Skipped" : "Skip set"}
+                      </button>
+                    </div>
                     <input
                       className="set-note"
                       aria-label={`Set ${setIndex + 1} notes`}
@@ -355,6 +308,18 @@ export function ExerciseCard({
                   onBlur={onFlush}
                 />
               </label>
+              {suggestion.weight != null ? (
+                <button
+                  type="button"
+                  className="button quiet"
+                  disabled={exercise.sets.every((set) => set.weight === suggestion.weight || set.status === "skipped")}
+                  onClick={fillSuggestedWeight}
+                >
+                  Fill {formatWeight(suggestion.weight, workout.unit)}
+                </button>
+              ) : null}
+              <p className="history-line">{suggestion.note}</p>
+              {exercise.instructions ? <p className="history-line">{exercise.instructions}</p> : null}
               <label className="field">
                 <span>Notes</span>
                 <textarea
@@ -401,6 +366,17 @@ export function ExerciseCard({
       ) : null}
     </article>
   );
+}
+
+function compactPrevious(exerciseKey: string, workout: WorkoutLog, history: WorkoutLog[]): string {
+  const previous = previousExercise(history, workout, exerciseKey);
+  if (!previous) return "none yet";
+  const set = previous.exercise.sets.find(isCompletedSet);
+  if (!set) return "none yet";
+  const [year, month, day] = previous.workout.date.split("-").map(Number);
+  const when = year && month && day ? new Date(year, month - 1, day).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : formatDisplayDate(previous.workout.date);
+  const weight = set.weight == null ? "BW" : formatWeight(set.weight, previous.workout.unit);
+  return `${when} · ${weight} × ${set.reps ?? "—"}`;
 }
 
 function saveLabel(set: SetLog, savedSignatures: Record<string, string>): string {

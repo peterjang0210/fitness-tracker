@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { TestGuide } from "./TestGuide.tsx";
 import {
+  asRun,
+  asSoccer,
   createSegment,
   formatClock,
   formatMiles,
   formatPace,
+  isSoccer,
   runTotals,
   segmentDistance,
   segmentLabels,
@@ -72,38 +75,33 @@ export function RunEditor({
         onSave();
       }}
     >
-      <div className="totals" aria-label="Treadmill totals">
-        <article className="target-card">
-          <p>Running distance</p>
-          <strong>{formatMiles(totals.runningMiles)}</strong>
-          <span>Running segments only</span>
+      {isSoccer(run) ? (
+        <article className="treadmill-summary" aria-label="Soccer summary">
+          <div>
+            <p>Activity</p>
+            <strong>Soccer</strong>
+            <span>{run.scheduledName ? `Replaces ${run.scheduledName}` : "Not a run"}</span>
+          </div>
+          <div>
+            <p>Active time</p>
+            <strong>{run.activeMinutes == null ? "—" : `${run.activeMinutes} min`}</strong>
+            <span>Not counted as running distance</span>
+          </div>
         </article>
-        <article className="target-card">
-          <p>Running time</p>
-          <strong>{formatClock(totals.runningMinutes)}</strong>
-          <span>Walking time excluded</span>
+      ) : (
+        <article className="treadmill-summary" aria-label="Treadmill summary">
+          <div>
+            <p>Treadmill time</p>
+            <strong>{formatClock(totals.totalMinutes)}</strong>
+            <span>Includes walking</span>
+          </div>
+          <div>
+            <p>Running distance</p>
+            <strong>{formatMiles(totals.runningMiles)}</strong>
+            <span>Running segments only · {formatClock(totals.runningMinutes)} · {formatPace(totals.paceSecondsPerMile)}</span>
+          </div>
         </article>
-        <article className="target-card">
-          <p>Average pace</p>
-          <strong>{formatPace(totals.paceSecondsPerMile)}</strong>
-          <span>Total running time ÷ distance</span>
-        </article>
-        <article className="target-card">
-          <p>Average speed</p>
-          <strong>{totals.runningMinutes > 0 ? `${(totals.runningMiles / (totals.runningMinutes / 60)).toFixed(2)} mph` : "—"}</strong>
-          <span>From the running segments</span>
-        </article>
-        <article className="target-card">
-          <p>Treadmill time</p>
-          <strong>{formatClock(totals.totalMinutes)}</strong>
-          <span>Includes walking</span>
-        </article>
-        <article className="target-card">
-          <p>Treadmill distance</p>
-          <strong>{formatMiles(totals.totalMiles)}</strong>
-          <span>Includes walking</span>
-        </article>
-      </div>
+      )}
 
       <div className="editor-bar">
         <label className="field">
@@ -116,6 +114,58 @@ export function RunEditor({
         </label>
       </div>
 
+      {isSoccer(run) ? (
+        <div className="edit-grid">
+          <label className="field">
+            <span>Active minutes</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              step="1"
+              required
+              value={run.activeMinutes ?? ""}
+              placeholder="Watch active time"
+              onChange={(event) => onChange({ ...run, activeMinutes: parseNumber(event.target.value) })}
+            />
+          </label>
+          <label className="field">
+            <span>Effort (optional)</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="1"
+              max="10"
+              step="0.5"
+              value={run.rpe ?? ""}
+              placeholder="1–10"
+              onChange={(event) => onChange({ ...run, rpe: parseNumber(event.target.value) })}
+            />
+          </label>
+          <label className="field">
+            <span>Calories (optional)</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="1"
+              value={run.calories ?? ""}
+              onChange={(event) => onChange({ ...run, calories: parseNumber(event.target.value) })}
+            />
+          </label>
+          <label className="field">
+            <span>Avg heart rate (optional)</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="1"
+              value={run.heartRate ?? ""}
+              onChange={(event) => onChange({ ...run, heartRate: parseNumber(event.target.value) })}
+            />
+          </label>
+        </div>
+      ) : (
       <div className="editor-bar">
         <label className="field">
           <span>Test</span>
@@ -165,7 +215,15 @@ export function RunEditor({
           </select>
         </label>
       </div>
-      {run.testKind ? (
+      )}
+      {run.planSlot ? (
+        <div className="inline-actions">
+          <button type="button" className="button quiet" onClick={() => onChange(isSoccer(run) ? asRun(run) : asSoccer(run))}>
+            {isSoccer(run) ? "Log the scheduled run" : "Replace with soccer"}
+          </button>
+        </div>
+      ) : null}
+      {run.testKind && !isSoccer(run) ? (
         <>
           <p className="callout">
             Do not run this test if your knee hurts or you are unusually sore. Warm-up and walking segments stay out of the time, distance, and pace. Edit the running segment so its time and speed match what you ran.
@@ -174,7 +232,9 @@ export function RunEditor({
         </>
       ) : null}
 
-      {run.segments.map((segment, index) => {
+      {isSoccer(run)
+        ? null
+        : run.segments.map((segment, index) => {
         const counted = segment.type === "running";
         return (
           <article className={counted ? "segment-card" : "segment-card is-walking"} key={segment.id}>
@@ -214,38 +274,45 @@ export function RunEditor({
                   onChange={(event) => updateSegment(segment.id, { seconds: parseNumber(event.target.value) ?? 0 })}
                 />
               </label>
-              <label className="field">
-                <span>Speed</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.1"
-                  value={numberValue(segment.speedMph)}
-                  onChange={(event) => updateSegment(segment.id, { speedMph: parseNumber(event.target.value) })}
-                />
-              </label>
-              <p className="segment-distance">
-                {segment.label ? <span>{segment.label}</span> : null}
-                <strong>{formatMiles(segmentDistance(segment))}</strong>
-                <span>{counted ? "Counts toward running" : "Walking, not in pace"}</span>
-              </p>
+              {counted ? (
+                <label className="field">
+                  <span>Speed (mph)</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    value={numberValue(segment.speedMph)}
+                    onChange={(event) => updateSegment(segment.id, { speedMph: parseNumber(event.target.value) })}
+                  />
+                </label>
+              ) : null}
             </div>
+            <p className="segment-distance">
+              {segment.label ? <span>{segment.label}</span> : null}
+              {counted ? (
+                <span>
+                  {formatMiles(segmentDistance(segment))} running
+                </span>
+              ) : (
+                <span>Counts toward treadmill time, not running distance</span>
+              )}
+            </p>
             <div className="inline-actions">
-              <button type="button" className="button" disabled={index === 0} onClick={() => moveSegment(index, -1)}>
-                Move up
+              <button type="button" className="button quiet compact" disabled={index === 0} onClick={() => moveSegment(index, -1)}>
+                Up
               </button>
               <button
                 type="button"
-                className="button"
+                className="button quiet compact"
                 disabled={index === run.segments.length - 1}
                 onClick={() => moveSegment(index, 1)}
               >
-                Move down
+                Down
               </button>
               <button
                 type="button"
-                className="button"
+                className="button quiet compact"
                 onClick={() => {
                   const segments = run.segments.slice();
                   segments.splice(index + 1, 0, { ...segment, id: crypto.randomUUID() });
@@ -256,7 +323,7 @@ export function RunEditor({
               </button>
               <button
                 type="button"
-                className="button"
+                className="button quiet compact"
                 onClick={() => onChange({ ...run, segments: run.segments.filter((item) => item.id !== segment.id) })}
               >
                 Delete
@@ -266,10 +333,13 @@ export function RunEditor({
         );
       })}
 
-      <button type="button" className="button" onClick={() => onChange({ ...run, segments: [...run.segments, createSegment()] })}>
-        Add segment
-      </button>
+      {isSoccer(run) ? null : (
+        <button type="button" className="button" onClick={() => onChange({ ...run, segments: [...run.segments, createSegment()] })}>
+          Add segment
+        </button>
+      )}
 
+      {isSoccer(run) ? null : (
       <label className="field">
         <span>RPE</span>
         <input
@@ -282,19 +352,20 @@ export function RunEditor({
           onChange={(event) => onChange({ ...run, rpe: parseNumber(event.target.value) })}
         />
       </label>
+      )}
       <label className="field">
         <span>Notes</span>
         <textarea
           rows={3}
           value={run.notes}
-          placeholder="How the run felt"
+          placeholder={isSoccer(run) ? "How the match felt" : "How the run felt"}
           onChange={(event) => onChange({ ...run, notes: event.target.value })}
         />
       </label>
 
       <div className="editor-actions">
         <button type="submit" className="button primary">
-          {run.status === "skipped" ? "Save skip" : "Save run"}
+          {run.status === "skipped" ? "Save skip" : isSoccer(run) ? "Save soccer" : "Save run"}
         </button>
         {run.planWeek ? (
           <button

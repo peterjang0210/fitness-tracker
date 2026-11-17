@@ -10,6 +10,7 @@ import {
   SQUAT_GOAL_LB,
   SQUAT_KEY,
   SQUAT_VOLUME_KEYS,
+  activityDurationSeries,
   fastestPace,
   filterPoints,
   liftSeries,
@@ -211,6 +212,15 @@ export function ProgressPage() {
           empty="No continuous run of at least 5K in this range."
           goal={{ value: fiveKPace, name: "25:00" }}
           series={[{ key: "pace", name: "Pace", color: "var(--good)" }]}
+        />
+        <TrendChart
+          title="Activity duration"
+          note="Running uses treadmill time. Soccer uses active minutes from the watch. Soccer is not included in the running distance or pace charts."
+          data={keep(activityDurationSeries(runs))}
+          kind="bar"
+          unit="min"
+          empty="No running or soccer time in this range."
+          series={[{ key: "minutes", name: "Minutes", color: "var(--good)" }]}
         />
         <TrendChart
           title="Treadmill speed"

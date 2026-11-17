@@ -12,6 +12,7 @@ import {
   liftSeries,
   runEffortSeries,
   fastestPace,
+  weeklyActivityMinutes,
 } from "../domain/progress.ts";
 import { FIVE_K_MILES, TESTING_WEEK, currentProgramWeek, planRunFor, weekPlan } from "../domain/runningProgram.ts";
 import { matchingWorkout, nextOpenItem, weekItems, type CalendarItem, type ItemStatus } from "../domain/schedule.ts";
@@ -41,6 +42,7 @@ export function DashboardPage() {
   const doneThisWeek = schedule.filter((item) => item.status === "done").length;
   const requiredThisWeek = schedule.filter((item) => !item.optional && item.kind !== "note").length;
   const weeksUntilTest = Math.max(0, TESTING_WEEK - weekNumber);
+  const activity = weeklyActivityMinutes(runs);
 
   const bench = liftSeries(workouts, BENCH_KEY, unit).at(-1);
   const squat = liftSeries(workouts, SQUAT_KEY, unit).at(-1);
@@ -79,7 +81,7 @@ export function DashboardPage() {
     },
   ];
 
-  const tips = buildTips(workouts, unit, schedule, weekNumber);
+  const tips = buildTips(workouts, unit, schedule, weekNumber, runs);
 
   return (
     <Page eyebrow={`Week ${weekNumber}`} title="Home" lede={`${week.phase}. ${doneThisWeek}/${requiredThisWeek || schedule.length} sessions logged this week.`}>
@@ -138,6 +140,8 @@ export function DashboardPage() {
         <h2>This week</h2>
         <p className="meta">
           {doneThisWeek} done · {schedule.filter((item) => item.status === "missed").length} missed
+          {activity.soccer > 0 ? ` · soccer ${activity.soccer} min` : ""}
+          {activity.running > 0 ? ` · running ${activity.running} min` : ""}
           {weeksUntilTest > 0 ? ` · ${weeksUntilTest} week${weeksUntilTest === 1 ? "" : "s"} to testing` : " · testing week"}
         </p>
         <ul className="schedule-list compact-schedule">
@@ -181,6 +185,7 @@ function buildTips(
   unit: Parameters<typeof formatWeight>[1],
   schedule: CalendarItem[],
   weekNumber: number,
+  runs: Parameters<typeof weeklyActivityMinutes>[0],
 ): { summary: string; detail: string }[] {
   const tips: { summary: string; detail: string }[] = [];
   const liftKeys: { key: string; label: string }[] = [
@@ -200,6 +205,19 @@ function buildTips(
     tips.push({ summary, detail: suggestion.note });
   }
 
+  const soccer = runs
+    .filter((run) => run.activity === "soccer" && run.status !== "skipped")
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  if (soccer && daysAgo(soccer.date, today) <= 7) {
+    tips.push({
+      summary: `Soccer: ${soccer.activeMinutes ?? "—"} active min.`,
+      detail:
+        soccer.rpe == null
+          ? "Counted as training, not as running distance. Add an effort rating if it should change the next run."
+          : `Logged at RPE ${soccer.rpe}. ${soccer.rpe >= 7 ? "The next run stays easier." : "Effort was moderate, so pace is unchanged."}`,
+    });
+  }
+
   const nextRun = schedule.find((item) => item.kind === "run" && (item.status === "today" || item.status === "upcoming" || item.status === "open"));
   if (nextRun) {
     tips.push({
@@ -209,6 +227,13 @@ function buildTips(
   }
 
   return tips.slice(0, 4);
+}
+
+function daysAgo(date: string, today: string): number {
+  const [year, month, day] = date.split("-").map(Number);
+  const [ty, tm, td] = today.split("-").map(Number);
+  if (!year || !month || !day || !ty || !tm || !td) return 99;
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(year, month - 1, day)) / 86_400_000);
 }
 
 function itemHref(

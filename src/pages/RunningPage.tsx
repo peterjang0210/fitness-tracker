@@ -14,6 +14,7 @@ import {
   formatClock,
   formatMiles,
   formatPace,
+  isSoccer,
   runTotals,
   templateFromRun,
   type RunWorkout,
@@ -39,6 +40,7 @@ export function RunningPage() {
   const [saved, setSaved] = useState(false);
   const [templateSaved, setTemplateSaved] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [activityFilter, setActivityFilter] = useState<"all" | "run" | "soccer">("all");
   const [params, setParams] = useSearchParams();
   const benchmark = benchmarkTotals();
 
@@ -68,7 +70,10 @@ export function RunningPage() {
     setSaved(false);
     setParams({}, { replace: true });
   }, [params]);
-  const listed = runs.slice().sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
+  const listed = runs
+    .filter((run) => activityFilter === "all" || (activityFilter === "soccer" ? isSoccer(run) : !isSoccer(run)))
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
 
   function changeDraft(next: RunWorkout) {
     setDraft(next);
@@ -205,7 +210,20 @@ export function RunningPage() {
           ) : null}
 
           <section className="panel">
-            <h2>Saved runs</h2>
+            <h2>Activity history</h2>
+            <div className="button-row" role="group" aria-label="Activity type">
+              {(
+                [
+                  ["all", "All"],
+                  ["run", "Runs"],
+                  ["soccer", "Soccer"],
+                ] as const
+              ).map(([id, label]) => (
+                <button key={id} type="button" className={activityFilter === id ? "button is-selected" : "button"} onClick={() => setActivityFilter(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
             {listed.length === 0 ? (
               <p>No runs yet. A saved run stays in this browser and can be reused.</p>
             ) : (
@@ -217,8 +235,12 @@ export function RunningPage() {
                       <div>
                         <strong>{run.name}</strong>
                         <p className="meta">
-                          {formatDisplayDate(run.date)} · {run.status === "skipped" ? "Skipped" : `${formatMiles(totals.runningMiles)} running`} ·{" "}
-                          {formatClock(totals.runningMinutes)} · {formatPace(totals.paceSecondsPerMile)}
+                          {formatDisplayDate(run.date)} ·{" "}
+                          {isSoccer(run)
+                            ? `Soccer · ${run.activeMinutes ?? "—"} active min${run.scheduledName ? ` · replaced ${run.scheduledName}` : ""}`
+                            : run.status === "skipped"
+                              ? "Skipped"
+                              : `${formatMiles(totals.runningMiles)} running · ${formatClock(totals.runningMinutes)} · ${formatPace(totals.paceSecondsPerMile)}`}
                           {run.rpe == null ? "" : ` · RPE ${run.rpe}`}
                         </p>
                       </div>

@@ -26,6 +26,7 @@ export type RunDifficulty = "easier" | "planned" | "harder";
 export type TestKind = "mile" | "fivek";
 export type EasyFormat = "steady" | "progressive" | "fartlek" | "variable";
 export type QualityFocus = "mile" | "fivek";
+export type ActivityKind = "run" | "soccer";
 
 export interface RunWorkout {
   id: string;
@@ -44,6 +45,11 @@ export interface RunWorkout {
   continuous: boolean | null;
   easyFormat: EasyFormat | null;
   qualityFocus: QualityFocus | null;
+  activity: ActivityKind;
+  activeMinutes: number | null;
+  calories: number | null;
+  heartRate: number | null;
+  scheduledName: string | null;
 }
 
 export interface RunTemplate {
@@ -66,7 +72,21 @@ export function createSegment(partial?: Partial<Omit<RunSegment, "id">>): RunSeg
 
 export function unplannedRunFields(): Pick<
   RunWorkout,
-  "rpe" | "status" | "planWeek" | "planSlot" | "difficulty" | "testKind" | "incline" | "continuous" | "easyFormat" | "qualityFocus"
+  | "rpe"
+  | "status"
+  | "planWeek"
+  | "planSlot"
+  | "difficulty"
+  | "testKind"
+  | "incline"
+  | "continuous"
+  | "easyFormat"
+  | "qualityFocus"
+  | "activity"
+  | "activeMinutes"
+  | "calories"
+  | "heartRate"
+  | "scheduledName"
 > {
   return {
     rpe: null,
@@ -79,6 +99,34 @@ export function unplannedRunFields(): Pick<
     continuous: null,
     easyFormat: null,
     qualityFocus: null,
+    activity: "run",
+    activeMinutes: null,
+    calories: null,
+    heartRate: null,
+    scheduledName: null,
+  };
+}
+
+export function isSoccer(run: Pick<RunWorkout, "activity">): boolean {
+  return run.activity === "soccer";
+}
+
+export function asSoccer(run: RunWorkout): RunWorkout {
+  if (run.activity === "soccer") return run;
+  return {
+    ...run,
+    activity: "soccer",
+    name: "Soccer",
+    scheduledName: run.scheduledName ?? run.name,
+  };
+}
+
+export function asRun(run: RunWorkout): RunWorkout {
+  if (run.activity !== "soccer") return run;
+  return {
+    ...run,
+    activity: "run",
+    name: run.scheduledName || "Treadmill run",
   };
 }
 
@@ -205,6 +253,10 @@ function positive(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 export function normalizeRun(value: unknown): RunWorkout | null {
   if (!isRecord(value) || typeof value.id !== "string" || typeof value.date !== "string") return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value.date) || !Array.isArray(value.segments)) return null;
@@ -212,13 +264,19 @@ export function normalizeRun(value: unknown): RunWorkout | null {
     const normalized = normalizeSegment(segment);
     return normalized ? [normalized] : [];
   });
-  if (segments.length === 0) return null;
+  const activity = value.activity === "soccer" ? "soccer" : "run";
+  if (segments.length === 0 && activity !== "soccer") return null;
   return {
     id: value.id,
     date: value.date,
-    name: typeof value.name === "string" && value.name.trim() ? value.name : "Treadmill run",
+    name: typeof value.name === "string" && value.name.trim() ? value.name : activity === "soccer" ? "Soccer" : "Treadmill run",
     notes: typeof value.notes === "string" ? value.notes : "",
     segments,
+    activity,
+    activeMinutes: finiteNumber(value.activeMinutes),
+    calories: finiteNumber(value.calories),
+    heartRate: finiteNumber(value.heartRate),
+    scheduledName: typeof value.scheduledName === "string" && value.scheduledName.trim() ? value.scheduledName : null,
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date(0).toISOString(),
     rpe: typeof value.rpe === "number" && Number.isFinite(value.rpe) ? value.rpe : null,
     status: value.status === "skipped" ? "skipped" : "logged",

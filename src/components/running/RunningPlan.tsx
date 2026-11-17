@@ -16,7 +16,7 @@ import {
   type PlanSession,
 } from "../../domain/runningProgram.ts";
 import { missedRequiredRuns, scheduledDate, type ScheduleOverride } from "../../domain/schedule.ts";
-import type { EasyFormat, QualityFocus, RunDifficulty, RunWorkout } from "../../domain/running.ts";
+import { asSoccer, isSoccer, type EasyFormat, type QualityFocus, type RunDifficulty, type RunWorkout } from "../../domain/running.ts";
 import type { WorkoutLog } from "../../domain/workoutLog.ts";
 import { TestGuide } from "./TestGuide.tsx";
 
@@ -142,7 +142,7 @@ function PlanCard({
       <span className={`status-pill is-${saved ? (saved.status === "skipped" ? "skipped" : "done") : "upcoming"}`}>
         {saved ? (saved.status === "skipped" ? "Skipped" : "Logged") : "Scheduled"}
       </span>
-      <strong>{ready.title}</strong>
+      <strong>{saved && isSoccer(saved) ? "Soccer" : ready.title}</strong>
       <span>{formatDisplayDate(date)}</span>
       <span>{ready.summary}</span>
       <span>{advice.reasons.join(" ")}</span>
@@ -189,6 +189,15 @@ function PlanCard({
         >
           {saved ? "Open" : "Start"}
         </button>
+        {session.fixed || (saved && isSoccer(saved)) ? null : (
+          <button
+            type="button"
+            className="button quiet"
+            onClick={() => onOpen(asSoccer(saved ?? plannedRun(ready, week, date, chosen)))}
+          >
+            Replace with soccer
+          </button>
+        )}
         {saved?.status === "logged" ? null : (
           <button
             type="button"
@@ -211,7 +220,7 @@ function PlanCard({
 
 function adviceLastRpe(runs: RunWorkout[]): number | null {
   const latest = runs
-    .filter((run) => run.status === "logged")
+    .filter((run) => run.status === "logged" && !isSoccer(run))
     .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt))[0];
   return latest?.rpe ?? null;
 }

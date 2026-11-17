@@ -961,11 +961,13 @@ a.button {
 .field textarea,
 .field select,
 .set-note,
-.range-dates input {
+.range-dates input,
+input[type="date"],
+input[type="number"] {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 2.75rem;
+  min-height: 3rem;
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: 0.65rem;
@@ -990,10 +992,32 @@ a.button {
   flex: 1 1 12rem;
 }
 
-.totals {
+.totals,
+.treadmill-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.6rem;
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--bg-raised);
+}
+
+.treadmill-summary p,
+.treadmill-summary span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.treadmill-summary strong {
+  display: block;
+  font-size: 1.35rem;
+}
+
+.treadmill-summary > div {
+  min-width: 0;
 }
 
 .segment-card {
@@ -1013,10 +1037,21 @@ a.button {
 
 .segment-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(0, 0.7fr)) minmax(0, 0.9fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
   align-items: end;
   min-width: 0;
+}
+
+.status-field {
+  flex: 0 1 7.5rem;
+  min-width: 0;
+}
+
+.button.compact {
+  min-height: 2rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.8rem;
 }
 
 .segment-distance {
@@ -1101,7 +1136,12 @@ a.button {
   }
 
   .editor-actions {
-    bottom: calc(4.85rem + env(safe-area-inset-bottom));
+    position: static;
+    margin-bottom: 0.25rem;
+  }
+
+  .content {
+    padding: 1rem 1rem calc(7.5rem + env(safe-area-inset-bottom));
   }
 
   .stat-grid,
@@ -1139,6 +1179,10 @@ a.button {
 
   .workout-row {
     align-items: flex-start;
+  }
+
+  .treadmill-summary {
+    grid-template-columns: 1fr;
   }
 
   .segment-grid {
