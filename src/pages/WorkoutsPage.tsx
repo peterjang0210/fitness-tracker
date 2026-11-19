@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Page } from "../components/layout/Page.tsx";
 import { WorkoutEditor } from "../components/workouts/WorkoutEditor.tsx";
-import { isProgramSessionKey, sessionTemplates, TESTING_WEEK } from "../domain/strengthProgram.ts";
+import { isProgramSessionKey, sessionTemplates } from "../domain/strengthProgram.ts";
+import { activeBlock, phaseWeek } from "../domain/trainingBlock.ts";
 import {
   createCustomWorkout,
   createWorkout,
@@ -30,6 +31,8 @@ export function WorkoutsPage() {
     libraryEdits = [],
     exerciseLibrary = [],
     futureSessions = [],
+    blocks = [],
+    activeBlockId = null,
     saveWorkout,
     deleteWorkout,
     saveLibraryExercise,
@@ -117,18 +120,22 @@ export function WorkoutsPage() {
       return;
     }
     const start = params.get("start");
+    const block = activeBlock(blocks, activeBlockId);
     if (start === "custom") {
-      remember(createCustomWorkout(settings.weightUnit), false);
+      const custom = createCustomWorkout(settings.weightUnit);
+      custom.blockId = block?.id ?? null;
+      remember(custom, false);
       setParams({}, { replace: true });
       return;
     }
     if (!isProgramSessionKey(start)) return;
     const week = Number(params.get("week"));
-    const planWeek = week >= 1 && week <= TESTING_WEEK ? week : null;
-    const next = createWorkout(start, settings.weightUnit, workouts, libraryEdits, futureSessions, planWeek);
+    const planWeek = week >= 1 && week <= 52 ? week : null;
+    const next = createWorkout(start, settings.weightUnit, workouts, libraryEdits, futureSessions, planWeek, planWeek && block ? phaseWeek(block, planWeek) : null);
     const date = params.get("date");
     if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) next.date = date;
     if (planWeek) next.planWeek = planWeek;
+    next.blockId = block?.id ?? null;
     remember(next, false);
     setParams({}, { replace: true });
   }, [params]);

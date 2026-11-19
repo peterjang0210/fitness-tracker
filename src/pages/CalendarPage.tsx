@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Page } from "../components/layout/Page.tsx";
-import { adviseSession, daysBetween, planRunFor, plannedRun, weekPlan, PROGRAM_WEEKS, addDays, currentProgramWeek, sessionDate } from "../domain/runningProgram.ts";
+import { adviseSession, daysBetween, planRunFor, plannedRun, weekPlanForBlock, addDays, currentProgramWeek, sessionDate } from "../domain/runningProgram.ts";
+import { activeBlock, blockLength, phaseWeek } from "../domain/trainingBlock.ts";
 import { missedRequiredRuns, matchingWorkout, scheduledDate, weekItems, type CalendarItem } from "../domain/schedule.ts";
 import { createWorkout, formatDisplayDate, suggestedWeight, todayInputDate } from "../domain/workoutLog.ts";
 import type { ProgramSessionKey } from "../domain/strengthProgram.ts";
@@ -15,7 +16,8 @@ export function CalendarPage() {
     workouts = [],
     runs = [],
     settings,
-    runningProgramStart = "2026-11-03",
+    blocks = [],
+    activeBlockId = null,
     scheduleOverrides = [],
     libraryEdits = [],
     futureSessions = [],
@@ -23,33 +25,45 @@ export function CalendarPage() {
     saveRun,
     setSessionDate,
   } = useAppState();
-  const [week, setWeek] = useState(() => currentProgramWeek(runningProgramStart));
-  const plan = weekPlan(week);
-  const todayWeek = currentProgramWeek(runningProgramStart);
-  const tuesday = sessionDate(runningProgramStart, week, "tuesday");
+  const block = activeBlock(blocks, activeBlockId);
+  const [week, setWeek] = useState(() => (block ? currentProgramWeek(block.startDate, undefined, blockLength(block)) : 1));
+  const plan = block ? weekPlanForBlock(block, week) : null;
+  const todayWeek = block ? currentProgramWeek(block.startDate, undefined, blockLength(block)) : 1;
   const today = todayInputDate();
+  if (!block || !plan) {
+    return (
+      <Page eyebrow="Schedule" title="Program" lede="No training block is active.">
+        <Link className="button primary" to="/blocks">
+          Training blocks
+        </Link>
+      </Page>
+    );
+  }
+  const tuesday = sessionDate(block.startDate, week, "tuesday");
   const gridStart = plan.testing ? addDays(tuesday, -1) : tuesday;
   const days = Array.from({ length: 7 }, (_, index) => addDays(gridStart, index));
-  const items = weekItems(runningProgramStart, week, scheduleOverrides, workouts, runs);
+  const items = block ? weekItems(block.startDate, week, scheduleOverrides, workouts, runs, today, block) : [];
   const mileDate = items.find((item) => item.kind === "run" && item.key === "tuesday")?.date;
   const fiveKDate = items.find((item) => item.kind === "run" && item.key === "friday")?.date;
   const testGap = plan.testing && mileDate && fiveKDate ? daysBetween(mileDate, fiveKDate) : null;
   const parked = items.filter((item) => item.date < days[0] || item.date > days[6]);
 
   function skip(item: CalendarItem) {
+    if (!block || !plan) return;
     if (item.kind === "strength") {
-      const draft = createWorkout(item.key as ProgramSessionKey, settings.weightUnit, workouts, libraryEdits, futureSessions, item.week);
+      const draft = createWorkout(item.key as ProgramSessionKey, settings.weightUnit, workouts, libraryEdits, futureSessions, item.week, phaseWeek(block, item.week));
       draft.date = item.date;
       draft.planWeek = item.week;
+      draft.blockId = block.id;
       draft.exercises = draft.exercises.map((exercise) => ({ ...exercise, status: "skipped" }));
       saveWorkout(draft);
       return;
     }
     const session = plan.sessions.find((entry) => entry.slot === item.key);
     if (!session || (item.key !== "tuesday" && item.key !== "thursday" && item.key !== "friday" && item.key !== "weekend")) return;
-    const existing = planRunFor(runs, item.week, item.key);
-    const advice = adviseSession(session, plan, item.date, runs, workouts, missedRequiredRuns(runningProgramStart, item.date, runs, scheduleOverrides));
-    saveRun({ ...(existing ?? plannedRun(session, item.week, item.date, advice.difficulty)), status: "skipped" });
+    const existing = planRunFor(runs, item.week, item.key, block.id);
+    const advice = adviseSession(session, plan, item.date, runs, workouts, missedRequiredRuns(block.startDate, item.date, runs, scheduleOverrides, today, block));
+    saveRun({ ...(existing ?? plannedRun(session, item.week, item.date, advice.difficulty)), status: "skipped", blockId: block.id });
   }
 
   return (
@@ -64,7 +78,7 @@ export function CalendarPage() {
             {week === todayWeek ? " · current" : ""}
             {plan.testing ? " · testing" : plan.recovery ? " · recovery" : ""}
           </strong>
-          <button type="button" className="button" disabled={week === PROGRAM_WEEKS} onClick={() => setWeek((value) => value + 1)}>
+          <button type="button" className="button" disabled={week === blockLength(block)} onClick={() => setWeek((value) => value + 1)}>
             Next week
           </button>
         </div>
@@ -90,16 +104,17 @@ export function CalendarPage() {
               .filter((item) => item.date === date)
               .map((item) => (
                 <SessionCard
+                  block={block}
                   key={`${item.kind}-${item.key}`}
                   item={item}
-                  start={runningProgramStart}
+                  start={block.startDate}
                   workouts={workouts}
                   runs={runs}
                   overrides={scheduleOverrides}
                   unit={settings.weightUnit}
                   onMove={(nextDate) => {
                     if (item.kind === "note") return;
-                    setSessionDate({ week: item.week, kind: item.kind, key: item.key, date: nextDate });
+                    setSessionDate({ week: item.week, kind: item.kind, key: item.key, date: nextDate, blockId: block.id });
                   }}
                   onSkip={() => skip(item)}
                 />
@@ -113,16 +128,17 @@ export function CalendarPage() {
           <div className="day-grid">
             {parked.map((item) => (
               <SessionCard
+                block={block}
                 key={`${item.kind}-${item.key}`}
                 item={item}
-                start={runningProgramStart}
+                start={block.startDate}
                 workouts={workouts}
                 runs={runs}
                 overrides={scheduleOverrides}
                 unit={settings.weightUnit}
                 onMove={(nextDate) => {
                   if (item.kind === "note") return;
-                  setSessionDate({ week: item.week, kind: item.kind, key: item.key, date: nextDate });
+                  setSessionDate({ week: item.week, kind: item.kind, key: item.key, date: nextDate, blockId: block.id });
                 }}
                 onSkip={() => skip(item)}
               />
@@ -144,8 +160,10 @@ function SessionCard({
   unit,
   onMove,
   onSkip,
+  block,
 }: {
   item: CalendarItem;
+  block: NonNullable<ReturnType<typeof activeBlock>>;
   start: string;
   workouts: Parameters<typeof matchingWorkout>[0];
   runs: Parameters<typeof planRunFor>[0];
@@ -154,8 +172,8 @@ function SessionCard({
   onMove: (date: string) => void;
   onSkip: () => void;
 }) {
-  const logged = item.kind === "strength" ? matchingWorkout(workouts, start, item.week, item.key, item.date) : null;
-  const run = item.kind === "run" && (item.key === "tuesday" || item.key === "friday" || item.key === "weekend") ? planRunFor(runs, item.week, item.key) : null;
+  const logged = item.kind === "strength" ? matchingWorkout(workouts, start, item.week, item.key, item.date, block.id) : null;
+  const run = item.kind === "run" && (item.key === "tuesday" || item.key === "thursday" || item.key === "friday" || item.key === "weekend") ? planRunFor(runs, item.week, item.key, block.id) : null;
   const href =
     item.kind === "note"
       ? ""
@@ -165,8 +183,8 @@ function SessionCard({
           : `/workouts?start=${item.key}&date=${item.date}&week=${item.week}`
         : run
           ? `/running?edit=${run.id}`
-          : runStartHref(item, start, runs, workouts, overrides);
-  const suggestion = item.kind === "strength" ? strengthNote(item, unit, workouts) : runNote(item, start, runs, workouts, overrides);
+          : runStartHref(item, start, runs, workouts, overrides, block);
+  const suggestion = item.kind === "strength" ? strengthNote(item, unit, workouts) : runNote(item, start, runs, workouts, overrides, block);
 
   return (
     <article className={`plan-item is-${item.status}`}>
@@ -207,10 +225,12 @@ function runNote(
   runs: Parameters<typeof planRunFor>[0],
   workouts: Parameters<typeof matchingWorkout>[0],
   overrides: Parameters<typeof missedRequiredRuns>[3],
+  block: NonNullable<ReturnType<typeof activeBlock>>,
 ): string {
-  const session = weekPlan(item.week).sessions.find((entry) => entry.slot === item.key);
+  const plan = weekPlanForBlock(block, item.week);
+  const session = plan.sessions.find((entry) => entry.slot === item.key);
   if (!session) return "";
-  const advice = adviseSession(session, weekPlan(item.week), item.date, runs, workouts, missedRequiredRuns(start, item.date, runs, overrides));
+  const advice = adviseSession(session, plan, item.date, runs, workouts, missedRequiredRuns(start, item.date, runs, overrides, undefined, block));
   const chosen = advice.difficulty === "easier" ? "Easier than planned" : "As planned";
   return `${chosen}. ${advice.reasons.join(" ")} Harder is available in the editor and is not selected for you.`;
 }
@@ -221,12 +241,14 @@ function runStartHref(
   runs: Parameters<typeof planRunFor>[0],
   workouts: Parameters<typeof matchingWorkout>[0],
   overrides: Parameters<typeof missedRequiredRuns>[3],
+  block: NonNullable<ReturnType<typeof activeBlock>>,
 ): string {
-  const session = weekPlan(item.week).sessions.find((entry) => entry.slot === item.key);
+  const plan = weekPlanForBlock(block, item.week);
+  const session = plan.sessions.find((entry) => entry.slot === item.key);
   const difficulty = session
-    ? adviseSession(session, weekPlan(item.week), item.date, runs, workouts, missedRequiredRuns(start, item.date, runs, overrides)).difficulty
+    ? adviseSession(session, plan, item.date, runs, workouts, missedRequiredRuns(start, item.date, runs, overrides, undefined, block)).difficulty
     : "planned";
-  const date = scheduledDate(overrides, item.week, "run", item.key, item.date);
+  const date = scheduledDate(overrides, item.week, "run", item.key, item.date, block.id);
   return `/running?slot=${item.key}&week=${item.week}&date=${date}&difficulty=${difficulty}`;
 }
 

@@ -1,5 +1,6 @@
 import { FIVE_K_MILES, addDays } from "./runningProgram.ts";
 import { nextOpenItem } from "./schedule.ts";
+import type { TrainingBlock } from "./trainingBlock.ts";
 import { durationMinutes, runTotals, segmentDistance, type RunWorkout } from "./running.ts";
 import { convertWeight } from "./strengthProgram.ts";
 import { isCompletedSet, lastWorkingWeight, todayInputDate, type WorkoutLog } from "./workoutLog.ts";
@@ -322,8 +323,8 @@ export interface NextSession {
   name: string;
 }
 
-export function nextSession(workouts: WorkoutLog[], runs: RunWorkout[], start: string, today = todayInputDate()): NextSession | null {
-  const item = nextOpenItem(start, [], workouts, runs, today);
+export function nextSession(workouts: WorkoutLog[], runs: RunWorkout[], start: string, block: TrainingBlock, today = todayInputDate()): NextSession | null {
+  const item = nextOpenItem(start, [], workouts, runs, today, block);
   return item ? { date: item.date, name: item.name } : null;
 }
 

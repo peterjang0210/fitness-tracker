@@ -18,6 +18,7 @@ export const navItems: NavItem[] = [
 
 /** Secondary destinations linked from Home / Workout / Settings. */
 export const secondaryNavItems: NavItem[] = [
+  { to: "/blocks", label: "Blocks", short: "Blocks", icon: "calendar" },
   { to: "/calendar", label: "Program", short: "Plan", icon: "calendar" },
   { to: "/running", label: "Running", short: "Runs", icon: "running" },
 ];

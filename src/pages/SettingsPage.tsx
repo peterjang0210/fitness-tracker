@@ -31,6 +31,8 @@ export function SettingsPage() {
     libraryEdits = [],
     exerciseLibrary = [],
     futureSessions = [],
+    blocks = [],
+    activeBlockId = null,
     storageError,
     updateSettings,
     setRunningProgramStart,
@@ -57,6 +59,8 @@ export function SettingsPage() {
     libraryEdits,
     exerciseLibrary,
     futureSessions,
+    blocks,
+    activeBlockId,
   };
 
   function exportJson() {
@@ -83,6 +87,9 @@ export function SettingsPage() {
     <Page eyebrow="Preferences" title="Settings" lede="Theme, units, program start, and backups stay on this device.">
       <div className="settings-stack">
         <div className="secondary-links" aria-label="Related">
+          <Link className="button" to="/blocks">
+            Training blocks
+          </Link>
           <Link className="button" to="/calendar">
             Program schedule
           </Link>
@@ -106,7 +113,7 @@ export function SettingsPage() {
         />
         <article className="panel">
           <h2>Program</h2>
-          <p>Week 1 begins on this Tuesday. Moving it shifts the calendar and the running plan. Saved workouts keep their own dates.</p>
+          <p>This date is week 1 of the active block. Moving it shifts that block’s calendar. Saved workouts keep their dates and stay attached to the block they were logged in.</p>
           <label className="field">
             <span>Week 1 Tuesday</span>
             <input type="date" value={runningProgramStart} onChange={(event) => setRunningProgramStart(event.target.value)} />

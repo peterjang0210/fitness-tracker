@@ -19,6 +19,7 @@ import {
   weeklyVolume,
 } from "../domain/progress.ts";
 import { FIVE_K_MILES } from "../domain/runningProgram.ts";
+import { recordsForBlock } from "../domain/trainingBlock.ts";
 import { formatClock, formatMiles, formatPace, runTotals } from "../domain/running.ts";
 import { formatDisplayDate } from "../domain/workoutLog.ts";
 import { Link } from "react-router-dom";
@@ -33,7 +34,12 @@ const presets = [
 ] as const;
 
 export function ProgressPage() {
-  const { workouts, runs, settings } = useAppState();
+  const { workouts: storedWorkouts, runs: storedRuns, settings, blocks = [] } = useAppState();
+  const [scope, setScope] = useState("all");
+  const scoped = blocks.find((block) => block.id === scope);
+  const scopedRecords = scoped ? recordsForBlock(scoped, storedWorkouts, storedRuns) : null;
+  const workouts = scopedRecords?.workouts ?? storedWorkouts;
+  const runs = scopedRecords?.runs ?? storedRuns;
   const unit = settings.weightUnit;
   const [preset, setPreset] = useState<(typeof presets)[number]["id"]>("16w");
   const [from, setFrom] = useState("");
@@ -55,6 +61,17 @@ export function ProgressPage() {
 
   return (
     <Page eyebrow="Charts" title="Progress" lede="Strength and running trends from this browser’s log.">
+      <label className="field">
+        <span>Chart scope</span>
+        <select value={scope} onChange={(event) => setScope(event.target.value)}>
+          <option value="all">All history</option>
+          {blocks.map((block) => (
+            <option key={block.id} value={block.id}>
+              {block.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="range-bar">
         <div className="button-row" role="group" aria-label="Date range">
           {presets.map((item) => (

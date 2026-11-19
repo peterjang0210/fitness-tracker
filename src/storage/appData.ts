@@ -2,7 +2,8 @@ import { DEFAULT_PROGRAM_START } from "../domain/runningProgram.ts";
 import { normalizeRun, normalizeRunTemplate, type RunTemplate, type RunWorkout } from "../domain/running.ts";
 import type { ScheduleOverride } from "../domain/schedule.ts";
 import type { WorkoutLog } from "../domain/workoutLog.ts";
-import { TESTING_WEEK, type ProgramSessionKey, type SessionKey } from "../domain/strengthProgram.ts";
+import { type ProgramSessionKey, type SessionKey } from "../domain/strengthProgram.ts";
+import { FIRST_BLOCK_ID, MAX_BLOCK_WEEKS, initialBlock, normalizeBlock, type TrainingBlock } from "../domain/trainingBlock.ts";
 
 export const STORAGE_KEY = "iron-mile.v1";
 
@@ -30,6 +31,8 @@ export interface AppData {
   libraryEdits: LibraryEdit[];
   exerciseLibrary: LibraryExercise[];
   futureSessions: FutureSessionPlan[];
+  blocks: TrainingBlock[];
+  activeBlockId: string | null;
 }
 
 export const exerciseCategories = ["compound", "isolation", "cardio", "other"] as const;
@@ -86,6 +89,8 @@ export const defaultAppData: AppData = {
   libraryEdits: [],
   exerciseLibrary: [],
   futureSessions: [],
+  blocks: [initialBlock(DEFAULT_PROGRAM_START)],
+  activeBlockId: FIRST_BLOCK_ID,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -106,6 +111,36 @@ export function normalizeAppData(value: unknown): AppData {
   }
 
   const settings = value.settings;
+  const start =
+    typeof value.runningProgramStart === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.runningProgramStart)
+      ? value.runningProgramStart
+      : defaultAppData.runningProgramStart;
+  const storedBlocks = Array.isArray(value.blocks) ? value.blocks : [];
+  const migrated = storedBlocks.length === 0;
+  const blocks = migrated
+    ? [initialBlock(start)]
+    : storedBlocks.flatMap((block) => {
+        const normalized = normalizeBlock(block);
+        return normalized ? [normalized] : [];
+      });
+  const storedActive = typeof value.activeBlockId === "string" ? value.activeBlockId : null;
+  const activeBlockId = blocks.some((block) => block.id === storedActive && block.status === "active")
+    ? storedActive
+    : (blocks.find((block) => block.status === "active")?.id ?? null);
+  const workouts = Array.isArray(value.workouts)
+    ? value.workouts.flatMap((workout) => {
+        const normalized = normalizeWorkout(workout);
+        if (!normalized) return [];
+        return [{ ...normalized, blockId: normalized.blockId ?? (migrated ? FIRST_BLOCK_ID : null) }];
+      })
+    : [];
+  const runs = Array.isArray(value.runs)
+    ? value.runs.flatMap((run) => {
+        const normalized = normalizeRun(run);
+        if (!normalized) return [];
+        return [{ ...normalized, blockId: normalized.blockId ?? (migrated ? FIRST_BLOCK_ID : null) }];
+      })
+    : [];
   return {
     version: 1,
     settings: {
@@ -115,28 +150,15 @@ export function normalizeAppData(value: unknown): AppData {
         : defaultAppData.settings.weightUnit,
       updatedAt: typeof settings.updatedAt === "string" ? settings.updatedAt : null,
     },
-    workouts: Array.isArray(value.workouts)
-      ? value.workouts.flatMap((workout) => {
-          const normalized = normalizeWorkout(workout);
-          return normalized ? [normalized] : [];
-        })
-      : [],
-    runs: Array.isArray(value.runs)
-      ? value.runs.flatMap((run) => {
-          const normalized = normalizeRun(run);
-          return normalized ? [normalized] : [];
-        })
-      : [],
+    workouts,
+    runs,
     runTemplates: Array.isArray(value.runTemplates)
       ? value.runTemplates.flatMap((template) => {
           const normalized = normalizeRunTemplate(template);
           return normalized ? [normalized] : [];
         })
       : [],
-    runningProgramStart:
-      typeof value.runningProgramStart === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.runningProgramStart)
-        ? value.runningProgramStart
-        : defaultAppData.runningProgramStart,
+    runningProgramStart: start,
     scheduleOverrides: Array.isArray(value.scheduleOverrides)
       ? value.scheduleOverrides.flatMap((item) => {
           const normalized = normalizeOverride(item);
@@ -161,6 +183,8 @@ export function normalizeAppData(value: unknown): AppData {
           return normalized ? [normalized] : [];
         })
       : [],
+    blocks: blocks.length > 0 ? blocks : [initialBlock(start)],
+    activeBlockId,
   };
 }
 
@@ -195,7 +219,9 @@ function normalizeWorkout(value: unknown): WorkoutLog | null {
     unit: isWeightUnit(value.unit) ? value.unit : "lb",
     exercises,
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date(0).toISOString(),
-    planWeek: typeof value.planWeek === "number" && value.planWeek >= 1 && value.planWeek <= TESTING_WEEK ? value.planWeek : null,
+    planWeek: typeof value.planWeek === "number" && value.planWeek >= 1 && value.planWeek <= MAX_BLOCK_WEEKS ? value.planWeek : null,
+    phaseWeek: typeof value.phaseWeek === "number" && value.phaseWeek >= 1 && value.phaseWeek <= MAX_BLOCK_WEEKS ? value.phaseWeek : null,
+    blockId: typeof value.blockId === "string" && value.blockId.trim() ? value.blockId : null,
   };
 }
 
@@ -205,13 +231,13 @@ function normalizeOverride(value: unknown): ScheduleOverride | null {
   const kind = value.kind;
   const key = value.key;
   const date = value.date;
-  if (typeof week !== "number" || week < 1 || week > TESTING_WEEK) return null;
+  if (typeof week !== "number" || week < 1 || week > MAX_BLOCK_WEEKS) return null;
   if (kind !== "strength" && kind !== "run") return null;
   if (typeof key !== "string") return null;
   if (kind === "strength" && !isProgramKey(key)) return null;
   if (kind === "run" && key !== "tuesday" && key !== "thursday" && key !== "friday" && key !== "weekend") return null;
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  return { week, kind, key, date };
+  return { week, kind, key, date, blockId: typeof value.blockId === "string" && value.blockId.trim() ? value.blockId : null };
 }
 
 function normalizeLibraryEdit(value: unknown): LibraryEdit | null {

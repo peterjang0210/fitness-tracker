@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { isProgramSessionKey, TESTING_WEEK } from "../../domain/strengthProgram.ts";
+import { isProgramSessionKey } from "../../domain/strengthProgram.ts";
 import type { WorkoutLog } from "../../domain/workoutLog.ts";
 import { duplicateExercise, exerciseFromLibrary, linkWithNext, moveExercise, supersetLabels, unlinkExercise, workoutHasLoggedSets } from "../../domain/workoutLog.ts";
 import type { LibraryExercise } from "../../storage/appData.ts";
@@ -147,7 +147,7 @@ export function WorkoutEditor({
         <button type="submit" className="button primary">
           Save this workout
         </button>
-        {programSession && workout.planWeek !== TESTING_WEEK ? (
+        {programSession && workout.phaseWeek !== 17 ? (
           <button type="button" className="button" onClick={onApplyFuture}>
             Also use for future sessions
           </button>

@@ -49,6 +49,8 @@ export interface WorkoutLog {
   exercises: ExerciseLog[];
   updatedAt: string;
   planWeek?: number | null;
+  phaseWeek?: number | null;
+  blockId?: string | null;
 }
 
 export function createId(): string {
@@ -133,9 +135,11 @@ export function createWorkout(
   edits: LibraryEdit[] = [],
   plans: FutureSessionPlan[] = [],
   week: number | null = null,
+  phase: number | null = null,
 ): WorkoutLog {
-  const template = sessionTemplate(sessionKey, week);
-  const plan = week === TESTING_WEEK ? undefined : plans.find((item) => item.sessionKey === sessionKey);
+  const templateWeek = phase ?? week;
+  const template = sessionTemplate(sessionKey, templateWeek);
+  const plan = templateWeek === TESTING_WEEK ? undefined : plans.find((item) => item.sessionKey === sessionKey);
   const draft: WorkoutLog = {
     id: createId(),
     date: todayInputDate(),
@@ -146,8 +150,10 @@ export function createWorkout(
     exercises: [],
     updatedAt: new Date().toISOString(),
     planWeek: week,
+    phaseWeek: templateWeek,
+    blockId: null,
   };
-  if (week === TESTING_WEEK) {
+  if (templateWeek === TESTING_WEEK) {
     draft.notes = "Testing week. Skip this if your knee hurts or you are unusually sore.";
   }
   if (plan) {
@@ -379,7 +385,7 @@ export interface WeightSuggestion {
 
 export function suggestedWeight(
   exerciseKey: string,
-  current: Pick<WorkoutLog, "id" | "date" | "unit"> & { planWeek?: number | null },
+  current: Pick<WorkoutLog, "id" | "date" | "unit"> & { planWeek?: number | null; phaseWeek?: number | null },
   history: WorkoutLog[],
 ): WeightSuggestion {
   const progressed = liftProgression(exerciseKey, current, history);
@@ -410,14 +416,14 @@ export function suggestedWeight(
     }
   }
   const template =
-    current.planWeek === TESTING_WEEK
+    (current.phaseWeek ?? current.planWeek) === TESTING_WEEK
       ? sessionTemplate("wednesday-squat", TESTING_WEEK).exercises.find((item) => item.exerciseKey === exerciseKey) ?? exerciseTemplate(exerciseKey)
       : exerciseTemplate(exerciseKey);
   if (template?.suggestedWeightLb == null) {
     return { weight: null, note: "No stored suggestion. Enter the weight you use." };
   }
   const weight = convertWeight(template.suggestedWeightLb, "lb", current.unit);
-  if (current.planWeek === TESTING_WEEK && exerciseKey === "barbell-squat") {
+  if ((current.phaseWeek ?? current.planWeek) === TESTING_WEEK && exerciseKey === "barbell-squat") {
     return {
       weight,
       note: `Suggested start is ${formatWeight(weight, current.unit)} for 2 easy sets. Skip the session if your knee hurts.`,
@@ -506,12 +512,12 @@ function startingSuggestion(exerciseKey: string, weight: number, unit: WeightUni
 
 export function previousSummary(
   exerciseKey: string,
-  current: Pick<WorkoutLog, "id" | "date" | "unit"> & { planWeek?: number | null },
+  current: Pick<WorkoutLog, "id" | "date" | "unit"> & { planWeek?: number | null; phaseWeek?: number | null },
   history: WorkoutLog[],
 ): string {
   const previous = previousExercise(history, current, exerciseKey);
   if (!previous) {
-    if (current.planWeek === TESTING_WEEK) {
+    if ((current.phaseWeek ?? current.planWeek) === TESTING_WEEK) {
       const testing = sessionTemplate("wednesday-squat", TESTING_WEEK).exercises.find((item) => item.exerciseKey === exerciseKey);
       if (testing?.baseline) return testing.baseline;
     }

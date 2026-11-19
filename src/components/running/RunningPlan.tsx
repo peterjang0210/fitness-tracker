@@ -3,7 +3,6 @@ import { formatDisplayDate } from "../../domain/workoutLog.ts";
 import {
   FIVE_K_GOAL_MPH,
   MILE_GOAL_MPH,
-  PROGRAM_WEEKS,
   adviseSession,
   currentProgramWeek,
   formatMph,
@@ -12,10 +11,11 @@ import {
   recommendEasyFormat,
   sessionDate,
   sessionVariant,
-  weekPlan,
+  weekPlanForBlock,
   type PlanSession,
 } from "../../domain/runningProgram.ts";
 import { missedRequiredRuns, scheduledDate, type ScheduleOverride } from "../../domain/schedule.ts";
+import { blockLength, type TrainingBlock } from "../../domain/trainingBlock.ts";
 import { asSoccer, isSoccer, type EasyFormat, type QualityFocus, type RunDifficulty, type RunWorkout } from "../../domain/running.ts";
 import type { WorkoutLog } from "../../domain/workoutLog.ts";
 import { TestGuide } from "./TestGuide.tsx";
@@ -28,6 +28,7 @@ const difficulties: { value: RunDifficulty; label: string }[] = [
 
 export function RunningPlan({
   start,
+  block,
   runs,
   workouts,
   overrides,
@@ -36,6 +37,7 @@ export function RunningPlan({
   onSkip,
 }: {
   start: string;
+  block: TrainingBlock;
   runs: RunWorkout[];
   workouts: WorkoutLog[];
   overrides: ScheduleOverride[];
@@ -43,9 +45,10 @@ export function RunningPlan({
   onOpen: (run: RunWorkout) => void;
   onSkip: (run: RunWorkout) => void;
 }) {
-  const [week, setWeek] = useState(() => currentProgramWeek(start));
-  const plan = weekPlan(week);
-  const todayWeek = currentProgramWeek(start);
+  const totalWeeks = blockLength(block);
+  const [week, setWeek] = useState(() => currentProgramWeek(start, undefined, totalWeeks));
+  const plan = weekPlanForBlock(block, week);
+  const todayWeek = currentProgramWeek(start, undefined, totalWeeks);
 
   return (
     <section className="panel plan-panel">
@@ -71,7 +74,7 @@ export function RunningPlan({
           <button
             type="button"
             className="button"
-            disabled={week === PROGRAM_WEEKS}
+            disabled={week === totalWeeks}
             onClick={() => setWeek((value) => value + 1)}
           >
             Next week
@@ -86,11 +89,13 @@ export function RunningPlan({
           <PlanCard
             key={session.slot}
             week={week}
+            plan={plan}
+            blockId={block.id}
             session={session}
             date={scheduledDate(overrides, week, "run", session.slot, sessionDate(start, week, session.slot))}
             runs={runs}
             workouts={workouts}
-            missedRequired={missedRequiredRuns(start, scheduledDate(overrides, week, "run", session.slot, sessionDate(start, week, session.slot)), runs, overrides)}
+            missedRequired={missedRequiredRuns(start, scheduledDate(overrides, week, "run", session.slot, sessionDate(start, week, session.slot), block.id), runs, overrides, undefined, block)}
             onOpen={onOpen}
             onSkip={onSkip}
           />
@@ -108,6 +113,8 @@ export function RunningPlan({
 
 function PlanCard({
   week,
+  plan,
+  blockId,
   session,
   date,
   runs,
@@ -117,6 +124,8 @@ function PlanCard({
   onSkip,
 }: {
   week: number;
+  plan: ReturnType<typeof weekPlanForBlock>;
+  blockId: string;
   session: PlanSession;
   date: string;
   runs: RunWorkout[];
@@ -125,8 +134,8 @@ function PlanCard({
   onOpen: (run: RunWorkout) => void;
   onSkip: (run: RunWorkout) => void;
 }) {
-  const advice = adviseSession(session, weekPlan(week), date, runs, workouts, missedRequired);
-  const saved = planRunFor(runs, week, session.slot);
+  const advice = adviseSession(session, plan, date, runs, workouts, missedRequired);
+  const saved = planRunFor(runs, week, session.slot, blockId);
   const [difficulty, setDifficulty] = useState<RunDifficulty>(saved?.difficulty ?? advice.difficulty);
   const [format, setFormat] = useState<EasyFormat>(saved?.easyFormat ?? recommendEasyFormat(week, adviceLastRpe(runs)));
   const [focus, setFocus] = useState<QualityFocus>(saved?.qualityFocus ?? session.qualityFocus ?? "mile");
@@ -185,7 +194,7 @@ function PlanCard({
         <button
           type="button"
           className="button primary"
-          onClick={() => onOpen(saved ? { ...saved, difficulty: chosen } : plannedRun(ready, week, date, chosen))}
+          onClick={() => onOpen(saved ? { ...saved, difficulty: chosen } : { ...plannedRun(ready, week, date, chosen), blockId })}
         >
           {saved ? "Open" : "Start"}
         </button>
@@ -193,7 +202,7 @@ function PlanCard({
           <button
             type="button"
             className="button quiet"
-            onClick={() => onOpen(asSoccer(saved ?? plannedRun(ready, week, date, chosen)))}
+            onClick={() => onOpen(asSoccer({ ...(saved ?? plannedRun(ready, week, date, chosen)), blockId }))}
           >
             Replace with soccer
           </button>
@@ -204,7 +213,7 @@ function PlanCard({
             className="button"
             onClick={() =>
               onSkip({
-                ...(saved ?? plannedRun(ready, week, date, chosen)),
+                ...(saved ?? { ...plannedRun(ready, week, date, chosen), blockId }),
                 status: "skipped",
                 difficulty: chosen,
               })

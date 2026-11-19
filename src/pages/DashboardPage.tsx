@@ -14,8 +14,9 @@ import {
   fastestPace,
   weeklyActivityMinutes,
 } from "../domain/progress.ts";
-import { FIVE_K_MILES, TESTING_WEEK, currentProgramWeek, planRunFor, weekPlan } from "../domain/runningProgram.ts";
+import { FIVE_K_MILES, currentProgramWeek, planRunFor, weekPlanForBlock } from "../domain/runningProgram.ts";
 import { matchingWorkout, nextOpenItem, weekItems, type CalendarItem, type ItemStatus } from "../domain/schedule.ts";
+import { activeBlock, blockEndDate, blockLength, daysRemaining, formatGoalValue, recordsForBlock } from "../domain/trainingBlock.ts";
 import { formatClock, formatPace } from "../domain/running.ts";
 import { convertWeight, formatWeight } from "../domain/strengthProgram.ts";
 import { formatDisplayDate, suggestedWeight, todayInputDate } from "../domain/workoutLog.ts";
@@ -31,23 +32,25 @@ const statusText: Record<ItemStatus, string> = {
 };
 
 export function DashboardPage() {
-  const { workouts, runs, settings, runningProgramStart, scheduleOverrides = [] } = useAppState();
+  const { workouts, runs, settings, scheduleOverrides = [], blocks = [], activeBlockId = null } = useAppState();
+  const block = activeBlock(blocks, activeBlockId);
   const unit = settings.weightUnit;
   const today = todayInputDate();
-  const weekNumber = currentProgramWeek(runningProgramStart);
-  const week = weekPlan(weekNumber);
-  const schedule = weekItems(runningProgramStart, weekNumber, scheduleOverrides, workouts, runs);
+  const weekNumber = block ? currentProgramWeek(block.startDate, today, blockLength(block)) : 1;
+  const week = block ? weekPlanForBlock(block, weekNumber) : null;
+  const schedule = block ? weekItems(block.startDate, weekNumber, scheduleOverrides, workouts, runs, today, block) : [];
   const todayItems = schedule.filter((item) => item.date === today);
-  const upcoming = nextOpenItem(runningProgramStart, scheduleOverrides, workouts, runs);
+  const upcoming = block ? nextOpenItem(block.startDate, scheduleOverrides, workouts, runs, today, block) : null;
   const doneThisWeek = schedule.filter((item) => item.status === "done").length;
   const requiredThisWeek = schedule.filter((item) => !item.optional && item.kind !== "note").length;
-  const weeksUntilTest = Math.max(0, TESTING_WEEK - weekNumber);
+  const weeksLeft = block ? Math.max(0, blockLength(block) - weekNumber) : 0;
+  const owned = block ? recordsForBlock(block, workouts, runs) : { workouts, runs };
   const activity = weeklyActivityMinutes(runs);
 
-  const bench = liftSeries(workouts, BENCH_KEY, unit).at(-1);
-  const squat = liftSeries(workouts, SQUAT_KEY, unit).at(-1);
-  const squatForGoal = bestSquatForGoal(workouts, unit);
-  const efforts = runEffortSeries(runs);
+  const bench = liftSeries(owned.workouts, BENCH_KEY, unit).at(-1);
+  const squat = liftSeries(owned.workouts, SQUAT_KEY, unit).at(-1);
+  const squatForGoal = bestSquatForGoal(owned.workouts, unit);
+  const efforts = runEffortSeries(owned.runs);
   const mile = fastestPace(efforts.miles);
   const fiveK = fastestPace(efforts.fiveKs);
   const fiveKSeconds = fiveK ? fiveK.pace * FIVE_K_MILES : null;
@@ -81,10 +84,50 @@ export function DashboardPage() {
     },
   ];
 
-  const tips = buildTips(workouts, unit, schedule, weekNumber, runs);
+  const tips = buildTips(owned.workouts, unit, schedule, weekNumber, owned.runs);
+  const finished = block ? today > blockEndDate(block) : false;
+
+  if (!block || !week) {
+    return (
+      <Page eyebrow="Training" title="Home" lede="No training block is active.">
+        <section className="panel">
+          <h2>Start a block</h2>
+          <p>The log, charts, and settings are still here. Create a block when you are ready for the next plan.</p>
+          <Link className="button primary" to="/blocks">
+            Training blocks
+          </Link>
+        </section>
+      </Page>
+    );
+  }
 
   return (
-    <Page eyebrow={`Week ${weekNumber}`} title="Home" lede={`${week.phase}. ${doneThisWeek}/${requiredThisWeek || schedule.length} sessions logged this week.`}>
+    <Page
+      eyebrow={block.name}
+      title={`Week ${weekNumber}`}
+      lede={`${week.phase}. ${doneThisWeek}/${requiredThisWeek || schedule.length} sessions logged this week. ${daysRemaining(block)} days left.`}
+    >
+      {finished ? (
+        <p className="callout">
+          This block has reached its end. <Link to="/blocks">Review the results</Link> before you start another one.
+        </p>
+      ) : null}
+      {block.goals.length > 0 ? (
+        <section className="panel">
+          <h2>Goals</h2>
+          <ul className="workout-list">
+            {block.goals.map((goal) => (
+              <li key={goal.id}>
+                <strong>{goal.name}</strong>
+                <p className="meta">
+                  Target {formatGoalValue(goal.target, goal)}
+                  {goal.baseline == null ? "" : ` · start ${formatGoalValue(goal.baseline, goal)}`}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <section className="panel focus-panel">
         <h2>Today</h2>
         {todayItems.length === 0 ? (
@@ -93,7 +136,7 @@ export function DashboardPage() {
           <ul className="schedule-list">
             {todayItems.map((item) => (
               <li key={`${item.kind}-${item.key}`}>
-                <Link className={`schedule-row is-${item.status}`} to={itemHref(item, runningProgramStart, workouts, runs)}>
+                <Link className={`schedule-row is-${item.status}`} to={itemHref(item, block.startDate, workouts, runs, block.id)}>
                   <span className={`status-pill is-${item.status}`}>{statusText[item.status]}</span>
                   <span className="schedule-copy">
                     <strong>{item.name}</strong>
@@ -106,7 +149,7 @@ export function DashboardPage() {
         )}
         {upcoming && upcoming.date !== today ? (
           <p className="next-up">
-            Next: <Link to={itemHref(upcoming, runningProgramStart, workouts, runs)}>{upcoming.name}</Link> · {formatDisplayDate(upcoming.date)}
+            Next: <Link to={itemHref(upcoming, block.startDate, workouts, runs, block.id)}>{upcoming.name}</Link> · {formatDisplayDate(upcoming.date)}
           </p>
         ) : null}
         <div className="inline-actions focus-links">
@@ -116,8 +159,8 @@ export function DashboardPage() {
           <Link className="button" to="/running">
             Log run
           </Link>
-          <Link className="button quiet" to="/calendar">
-            Program
+          <Link className="button quiet" to="/blocks">
+            Blocks
           </Link>
         </div>
       </section>
@@ -142,14 +185,14 @@ export function DashboardPage() {
           {doneThisWeek} done · {schedule.filter((item) => item.status === "missed").length} missed
           {activity.soccer > 0 ? ` · soccer ${activity.soccer} min` : ""}
           {activity.running > 0 ? ` · running ${activity.running} min` : ""}
-          {weeksUntilTest > 0 ? ` · ${weeksUntilTest} week${weeksUntilTest === 1 ? "" : "s"} to testing` : " · testing week"}
+          {weeksLeft > 0 ? ` · ${weeksLeft} week${weeksLeft === 1 ? "" : "s"} left` : " · final week"}
         </p>
         <ul className="schedule-list compact-schedule">
           {schedule
             .filter((item) => item.kind !== "note")
             .map((item) => (
               <li key={`${item.kind}-${item.key}`}>
-                <Link className={`schedule-row is-${item.status}`} to={itemHref(item, runningProgramStart, workouts, runs)}>
+                <Link className={`schedule-row is-${item.status}`} to={itemHref(item, block.startDate, workouts, runs, block.id)}>
                   <span className={`status-pill is-${item.status}`}>{statusText[item.status]}</span>
                   <span className="schedule-copy">
                     <strong>{item.name}</strong>
@@ -241,14 +284,15 @@ function itemHref(
   start: string,
   workouts: Parameters<typeof matchingWorkout>[0],
   runs: Parameters<typeof planRunFor>[0],
+  blockId?: string | null,
 ): string {
   if (item.kind === "note") return "/calendar";
   if (item.kind === "strength") {
-    const logged = matchingWorkout(workouts, start, item.week, item.key, item.date);
+    const logged = matchingWorkout(workouts, start, item.week, item.key, item.date, blockId);
     return logged ? `/workouts?edit=${logged.id}` : `/workouts?start=${item.key}&date=${item.date}&week=${item.week}`;
   }
   if (item.key === "tuesday" || item.key === "thursday" || item.key === "friday" || item.key === "weekend") {
-    const run = planRunFor(runs, item.week, item.key);
+    const run = planRunFor(runs, item.week, item.key, blockId);
     if (run) return `/running?edit=${run.id}`;
   }
   return `/running?slot=${item.key}&week=${item.week}&date=${item.date}`;

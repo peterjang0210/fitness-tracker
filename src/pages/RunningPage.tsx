@@ -4,7 +4,8 @@ import { Page } from "../components/layout/Page.tsx";
 import { RunEditor } from "../components/running/RunEditor.tsx";
 import { RunningPlan } from "../components/running/RunningPlan.tsx";
 import { scheduledDate } from "../domain/schedule.ts";
-import { manualTest, planRunFor, plannedRun, PROGRAM_WEEKS, recommendEasyFormat, sessionDate, sessionVariant, weekPlan } from "../domain/runningProgram.ts";
+import { manualTest, planRunFor, plannedRun, recommendEasyFormat, sessionDate, sessionVariant, weekPlanForBlock } from "../domain/runningProgram.ts";
+import { activeBlock, blockLength } from "../domain/trainingBlock.ts";
 import { formatDisplayDate } from "../domain/workoutLog.ts";
 import {
   benchmarkTotals,
@@ -30,7 +31,8 @@ export function RunningPage() {
     deleteRun,
     saveRunTemplate,
     deleteRunTemplate,
-    runningProgramStart = "2026-11-03",
+    blocks = [],
+    activeBlockId = null,
     scheduleOverrides = [],
     setRunningProgramStart,
   } = useAppState();
@@ -57,16 +59,17 @@ export function RunningPage() {
     }
     const slot = params.get("slot");
     const week = Number(params.get("week"));
-    if ((slot !== "tuesday" && slot !== "thursday" && slot !== "friday" && slot !== "weekend") || week < 1 || week > PROGRAM_WEEKS) return;
-    const session = weekPlan(week).sessions.find((item) => item.slot === slot);
+    const block = activeBlock(blocks, activeBlockId);
+    if (!block || (slot !== "tuesday" && slot !== "thursday" && slot !== "friday" && slot !== "weekend") || week < 1 || week > blockLength(block)) return;
+    const session = weekPlanForBlock(block, week).sessions.find((item) => item.slot === slot);
     if (!session) return;
     const difficulty = params.get("difficulty");
     const chosen = difficulty === "easier" || difficulty === "harder" || difficulty === "planned" ? difficulty : "planned";
-    const date = params.get("date") ?? scheduledDate(scheduleOverrides, week, "run", slot, sessionDate(runningProgramStart, week, slot));
-    const existing = planRunFor(runs, week, slot);
+    const date = params.get("date") ?? scheduledDate(scheduleOverrides, week, "run", slot, sessionDate(block.startDate, week, slot), block.id);
+    const existing = planRunFor(runs, week, slot, block.id);
     const latest = runs.filter((run) => run.status === "logged").sort((a, b) => b.date.localeCompare(a.date))[0];
     const ready = sessionVariant(session, week, recommendEasyFormat(week, latest?.rpe ?? null), session.qualityFocus ?? "mile");
-    setDraft(existing ?? plannedRun(ready, week, date, chosen));
+    setDraft(existing ?? { ...plannedRun(ready, week, date, chosen), blockId: block.id });
     setSaved(false);
     setParams({}, { replace: true });
   }, [params]);
@@ -116,8 +119,10 @@ export function RunningPage() {
         />
       ) : (
         <div className="workout-home">
+          {activeBlock(blocks, activeBlockId) ? (
           <RunningPlan
-            start={runningProgramStart}
+            block={activeBlock(blocks, activeBlockId)!}
+            start={activeBlock(blocks, activeBlockId)!.startDate}
             runs={runs}
             workouts={workouts}
             overrides={scheduleOverrides}
@@ -127,6 +132,11 @@ export function RunningPage() {
               saveRun(run);
             }}
           />
+          ) : (
+            <p className="callout">
+              No training block is active. Open Blocks to start one. Logged runs below stay available.
+            </p>
+          )}
           <article className="panel">
             <h2>Starting benchmark</h2>
             <p>

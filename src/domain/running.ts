@@ -1,4 +1,3 @@
-import { TESTING_WEEK } from "./strengthProgram.ts";
 import { createId, todayInputDate } from "./workoutLog.ts";
 
 export const segmentTypes = ["warmup", "running", "recovery", "cooldown"] as const;
@@ -50,6 +49,7 @@ export interface RunWorkout {
   calories: number | null;
   heartRate: number | null;
   scheduledName: string | null;
+  blockId: string | null;
 }
 
 export interface RunTemplate {
@@ -87,6 +87,7 @@ export function unplannedRunFields(): Pick<
   | "calories"
   | "heartRate"
   | "scheduledName"
+  | "blockId"
 > {
   return {
     rpe: null,
@@ -104,6 +105,7 @@ export function unplannedRunFields(): Pick<
     calories: null,
     heartRate: null,
     scheduledName: null,
+    blockId: null,
   };
 }
 
@@ -277,10 +279,11 @@ export function normalizeRun(value: unknown): RunWorkout | null {
     calories: finiteNumber(value.calories),
     heartRate: finiteNumber(value.heartRate),
     scheduledName: typeof value.scheduledName === "string" && value.scheduledName.trim() ? value.scheduledName : null,
+    blockId: typeof value.blockId === "string" && value.blockId.trim() ? value.blockId : null,
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date(0).toISOString(),
     rpe: typeof value.rpe === "number" && Number.isFinite(value.rpe) ? value.rpe : null,
     status: value.status === "skipped" ? "skipped" : "logged",
-    planWeek: typeof value.planWeek === "number" && value.planWeek >= 1 && value.planWeek <= TESTING_WEEK ? value.planWeek : null,
+    planWeek: typeof value.planWeek === "number" && value.planWeek >= 1 && value.planWeek <= 52 ? value.planWeek : null,
     testKind: value.testKind === "mile" || value.testKind === "fivek" ? value.testKind : null,
     incline: typeof value.incline === "number" && Number.isFinite(value.incline) ? value.incline : null,
     continuous: value.continuous === true ? true : value.continuous === false ? false : null,

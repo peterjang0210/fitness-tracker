@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { RunTemplate, RunWorkout } from "../domain/running.ts";
 import type { ScheduleOverride } from "../domain/schedule.ts";
+import { reviewBlock, type TrainingBlock } from "../domain/trainingBlock.ts";
 import type { WorkoutLog } from "../domain/workoutLog.ts";
 import { AppStateContext, type SettingsPatch } from "./appStateContext.ts";
 import {
@@ -79,6 +80,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       libraryEdits: data.libraryEdits ?? [],
       exerciseLibrary: data.exerciseLibrary ?? [],
       futureSessions: data.futureSessions ?? [],
+      blocks: data.blocks ?? [],
+      activeBlockId: data.activeBlockId ?? null,
       storageError,
       updateSettings(patch: SettingsPatch) {
         commit((current) => ({
@@ -91,7 +94,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         }));
       },
       saveWorkout(workout: WorkoutLog) {
-        const nextWorkout = { ...workout, updatedAt: new Date().toISOString() };
+        const nextWorkout = {
+          ...workout,
+          blockId: workout.blockId ?? dataRef.current.activeBlockId,
+          updatedAt: new Date().toISOString(),
+        };
         commit((current) => ({
           ...current,
           workouts: current.workouts.some((item) => item.id === workout.id)
@@ -106,7 +113,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         }));
       },
       saveRun(run: RunWorkout) {
-        const nextRun = { ...run, updatedAt: new Date().toISOString() };
+        const nextRun = {
+          ...run,
+          blockId: run.blockId ?? dataRef.current.activeBlockId,
+          updatedAt: new Date().toISOString(),
+        };
         commit((current) => ({
           ...current,
           runs: current.runs.some((item) => item.id === run.id)
@@ -137,7 +148,60 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       },
       setRunningProgramStart(date: string) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-        commit((current) => ({ ...current, runningProgramStart: date }));
+        commit((current) => ({
+          ...current,
+          runningProgramStart: date,
+          blocks: current.blocks.map((block) => (block.id === current.activeBlockId ? { ...block, startDate: date } : block)),
+        }));
+      },
+      saveBlock(block: TrainingBlock) {
+        commit((current) => ({
+          ...current,
+          blocks: current.blocks.some((item) => item.id === block.id)
+            ? current.blocks.map((item) => (item.id === block.id ? block : item))
+            : [...current.blocks, block],
+        }));
+      },
+      activateBlock(blockId: string) {
+        commit((current) => {
+          const block = current.blocks.find((item) => item.id === blockId);
+          if (!block || block.status === "archived") return current;
+          if (current.blocks.some((item) => item.status === "active" && item.id !== blockId)) return current;
+          return {
+            ...current,
+            activeBlockId: blockId,
+            runningProgramStart: block.startDate,
+            blocks: current.blocks.map((item) => (item.id === blockId ? { ...item, status: "active" } : item)),
+          };
+        });
+      },
+      completeBlock(blockId: string) {
+        commit((current) => {
+          const block = current.blocks.find((item) => item.id === blockId);
+          if (!block) return current;
+          const assessment = { ...reviewBlock(block, current.workouts, current.runs), confirmedAt: new Date().toISOString() };
+          return {
+            ...current,
+            activeBlockId: current.activeBlockId === blockId ? null : current.activeBlockId,
+            blocks: current.blocks.map((item) => (item.id === blockId ? { ...item, status: "completed", assessment } : item)),
+          };
+        });
+      },
+      removeBlock(blockId: string) {
+        commit((current) => {
+          const block = current.blocks.find((item) => item.id === blockId);
+          if (!block || block.status !== "upcoming") return current;
+          const used = current.workouts.some((workout) => workout.blockId === blockId) || current.runs.some((run) => run.blockId === blockId);
+          if (used) return current;
+          return { ...current, blocks: current.blocks.filter((item) => item.id !== blockId) };
+        });
+      },
+      archiveBlock(blockId: string) {
+        commit((current) => ({
+          ...current,
+          activeBlockId: current.activeBlockId === blockId ? null : current.activeBlockId,
+          blocks: current.blocks.map((item) => (item.id === blockId ? { ...item, status: "archived" } : item)),
+        }));
       },
       setLibraryEdit(edit: LibraryEdit) {
         commit((current) => ({
@@ -190,14 +254,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           ...current,
           scheduleOverrides: [
             ...(current.scheduleOverrides ?? []).filter(
-              (item) => !(item.week === override.week && item.kind === override.kind && item.key === override.key),
+              (item) =>
+                !(
+                  item.week === override.week &&
+                  item.kind === override.kind &&
+                  item.key === override.key &&
+                  (item.blockId ?? null) === (override.blockId ?? null)
+                ),
             ),
             override,
           ],
         }));
       },
     }),
-    [commit, data.settings, data.workouts, data.runs, data.runTemplates, data.runningProgramStart, data.scheduleOverrides, data.libraryEdits, data.exerciseLibrary, data.futureSessions, storageError],
+    [commit, data.settings, data.workouts, data.runs, data.runTemplates, data.runningProgramStart, data.scheduleOverrides, data.libraryEdits, data.exerciseLibrary, data.futureSessions, data.blocks, data.activeBlockId, storageError],
   );
 
   return <AppStateContext value={value}>{children}</AppStateContext>;

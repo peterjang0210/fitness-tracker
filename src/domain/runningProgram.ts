@@ -1,3 +1,4 @@
+import type { TrainingBlock } from "./trainingBlock.ts";
 import { TESTING_WEEK } from "./strengthProgram.ts";
 import { createId, formatDisplayDate, isCompletedSet, todayInputDate, type WorkoutLog } from "./workoutLog.ts";
 import {
@@ -338,6 +339,7 @@ export function manualTest(kind: TestKind, date = todayInputDate()): RunWorkout 
     calories: null,
     heartRate: null,
     scheduledName: null,
+    blockId: null,
   };
 }
 
@@ -362,10 +364,49 @@ export function daysBetween(start: string, end: string): number {
   return Math.round((to - from) / 86_400_000);
 }
 
-export function currentProgramWeek(start: string, today = todayInputDate()): number {
+export function currentProgramWeek(start: string, today = todayInputDate(), totalWeeks = PROGRAM_WEEKS): number {
   const elapsed = daysBetween(start, today);
   if (elapsed < 0) return 1;
-  return Math.min(PROGRAM_WEEKS, Math.floor(elapsed / 7) + 1);
+  return Math.min(totalWeeks, Math.floor(elapsed / 7) + 1);
+}
+
+export function weekPlanForBlock(block: TrainingBlock, week: number): WeekPlan {
+  const total = block.trainingWeeks + (block.includeTesting ? 1 : 0);
+  const safeWeek = Math.min(Math.max(1, week), Math.max(1, total));
+  if (
+    block.trainingWeeks === 16 &&
+    block.includeTesting &&
+    block.emphasis === "balanced" &&
+    block.qualityStartWeek === 3 &&
+    block.days.shortRun &&
+    block.days.quality &&
+    block.days.longRun
+  ) {
+    return weekPlan(safeWeek);
+  }
+  if (block.includeTesting && safeWeek === total) return weekPlan(TESTING_WEEK);
+  const phase = block.emphasis === "maintain" || block.emphasis === "general" ? 2 : block.emphasis === "running" ? Math.min(4, safeWeek) : safeWeek;
+  const qualityPhase = block.emphasis === "strength" ? Math.min(4, phase) : phase;
+  const sessions: PlanSession[] = [];
+  if (block.days.shortRun) sessions.push(easyDay("tuesday", shortRunMinutes[Math.min(16, phase)] ?? 12));
+  if (block.days.quality && block.emphasis !== "general" && safeWeek >= block.qualityStartWeek) sessions.push(qualityDay(qualityPhase));
+  if (block.days.longRun) sessions.push(easyDay("weekend", longRunMinutes[Math.min(16, phase)] ?? 20));
+  const deload = phase === 4 || phase === 8 || phase === 12 || phase === 16 || block.emphasis === "maintain";
+  return {
+    week: safeWeek,
+    phase: phase <= 4 ? "Base and technique" : phase <= 8 ? "Volume and strength" : phase <= 12 ? "Strength development" : "Strength emphasis",
+    recovery: deload,
+    note: safeWeek < block.qualityStartWeek
+      ? "Easy running only until the quality sessions begin."
+      : block.emphasis === "running"
+        ? "Running is the priority. Strength stays in the base phase."
+        : block.emphasis === "strength"
+          ? "Strength is the priority. Speed work stays conservative."
+          : block.emphasis === "maintain"
+            ? "Maintain the current fitness. Keep the work easy."
+            : "General fitness. Easy running, with strength only on the days you kept.",
+    sessions,
+  };
 }
 
 export function sessionDate(start: string, week: number, slot: PlanSlot): string {
@@ -447,6 +488,7 @@ export function plannedRun(session: PlanSession, week: number, date: string, dif
     calories: null,
     heartRate: null,
     scheduledName: null,
+    blockId: null,
   };
 }
 
@@ -551,10 +593,10 @@ function recentSquat(workouts: WorkoutLog[], date: string): { name: string; date
   return best;
 }
 
-export function planRunFor(runs: RunWorkout[], week: number, slot: PlanSlot): RunWorkout | null {
+export function planRunFor(runs: RunWorkout[], week: number, slot: PlanSlot, blockId?: string | null): RunWorkout | null {
   return (
     runs
-      .filter((run) => run.planWeek === week && run.planSlot === slot)
+      .filter((run) => run.planWeek === week && run.planSlot === slot && (!blockId || !run.blockId || run.blockId === blockId))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
   );
 }
